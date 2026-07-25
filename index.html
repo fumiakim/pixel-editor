@@ -6,8 +6,9 @@
 <title>DOT EDITOR — ドット絵エディタ</title>
 <style>
   :root{
-    --bg:#14161a; --panel:#1c1f26; --panel2:#242833; --line:#333949;
-    --fg:#e6e9f0; --dim:#8b93a7; --accent:#59c2ff; --accent2:#ffb454;
+    --bg:#33363d; --panel:#292c33; --panel2:#31353d; --line:#4a4f5c;
+    --fg:#e6e9f0; --dim:#9aa2b4; --accent:#59c2ff; --accent2:#ffb454;
+    --chk1:#e9ebef; --chk2:#dcdfe4;   /* 透明部分の格子（薄いグレー） */
   }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0}
@@ -42,18 +43,16 @@
   }
   #stage{
     flex:1; overflow:auto; display:flex; align-items:center; justify-content:center; padding:24px;
-    background:
-      linear-gradient(0deg,rgba(255,255,255,.02),rgba(255,255,255,.02)),
-      var(--bg);
+    background:var(--bg);
   }
-  #wrap{position:relative; line-height:0; box-shadow:0 0 0 1px #000, 0 8px 40px rgba(0,0,0,.6)}
+  #wrap{position:relative; line-height:0; box-shadow:0 0 0 1px rgba(0,0,0,.5), 0 8px 32px rgba(0,0,0,.45)}
   #wrap.checker{
-    background-color:#5a5f6b;
+    background-color:var(--chk1);
     background-image:
-      linear-gradient(45deg,#3d414b 25%,transparent 25%),
-      linear-gradient(-45deg,#3d414b 25%,transparent 25%),
-      linear-gradient(45deg,transparent 75%,#3d414b 75%),
-      linear-gradient(-45deg,transparent 75%,#3d414b 75%);
+      linear-gradient(45deg,var(--chk2) 25%,transparent 25%),
+      linear-gradient(-45deg,var(--chk2) 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,var(--chk2) 75%),
+      linear-gradient(-45deg,transparent 75%,var(--chk2) 75%);
     background-size:16px 16px;
     background-position:0 0,0 8px,8px -8px,-8px 0;
   }
@@ -75,10 +74,11 @@
     background:var(--panel2); color:var(--fg); border:1px solid var(--line);
     border-radius:6px; padding:5px 8px; font:inherit; font-size:12px; cursor:pointer;
   }
-  #side .box button, #side .box select, #side .box input{background:#1a1d25}
-  button:hover{background:#30364a}
-  button.primary{background:var(--accent); color:#0d1117; border-color:#8fd7ff; font-weight:700}
-  button.primary:hover{filter:brightness(1.1)}
+  #side .box button, #side .box select, #side .box input{background:#252831}
+  button:hover{background:#3f4553}
+  /* .primary は #side .box button より詳細度が低いので、同等の指定で上書きする */
+  button.primary, #side .box button.primary{background:var(--accent); color:#12161c; border-color:#8fd7ff; font-weight:700}
+  button.primary:hover, #side .box button.primary:hover{background:#7cd0ff}
   button:disabled{opacity:.35; cursor:default}
   input[type=number]{width:62px; cursor:text}
   label{color:var(--dim); font-size:11px}
@@ -94,13 +94,13 @@
   .fr{position:relative; border:2px solid var(--line); border-radius:7px; padding:3px; background:#0f1116; cursor:pointer}
   .fr.on{border-color:var(--accent)}
   .fr canvas{display:block; width:48px; height:48px; image-rendering:pixelated;
-    background-color:#5a5f6b;
-    background-image:linear-gradient(45deg,#3d414b 25%,transparent 25%),linear-gradient(-45deg,#3d414b 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#3d414b 75%),linear-gradient(-45deg,transparent 75%,#3d414b 75%);
+    background-color:var(--chk1);
+    background-image:linear-gradient(45deg,var(--chk2) 25%,transparent 25%),linear-gradient(-45deg,var(--chk2) 25%,transparent 25%),linear-gradient(45deg,transparent 75%,var(--chk2) 75%),linear-gradient(-45deg,transparent 75%,var(--chk2) 75%);
     background-size:10px 10px; background-position:0 0,0 5px,5px -5px,-5px 0;}
   .fr b{position:absolute; left:2px; top:2px; font-size:9px; background:rgba(0,0,0,.6); padding:0 3px; border-radius:3px; color:#fff}
 
-  #preview{background-color:#5a5f6b; image-rendering:pixelated; border-radius:6px; display:block; margin:0 auto;
-    background-image:linear-gradient(45deg,#3d414b 25%,transparent 25%),linear-gradient(-45deg,#3d414b 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#3d414b 75%),linear-gradient(-45deg,transparent 75%,#3d414b 75%);
+  #preview{background-color:var(--chk1); image-rendering:pixelated; border-radius:6px; display:block; margin:0 auto;
+    background-image:linear-gradient(45deg,var(--chk2) 25%,transparent 25%),linear-gradient(-45deg,var(--chk2) 25%,transparent 25%),linear-gradient(45deg,transparent 75%,var(--chk2) 75%),linear-gradient(-45deg,transparent 75%,var(--chk2) 75%);
     background-size:12px 12px; background-position:0 0,0 6px,6px -6px,-6px 0;}
 
   #pos{color:var(--dim); font-variant-numeric:tabular-nums; margin-left:auto; padding-right:4px}
@@ -366,13 +366,13 @@ function drawGrid(){
   octx.clearRect(0,0,W,H);
   if(!S.grid || S.zoom<4) return;
   octx.lineWidth=1/dpr;
-  octx.strokeStyle='rgba(255,255,255,.22)';
+  octx.strokeStyle='rgba(0,0,0,.22)';            // 薄い格子の上でも見えるよう暗い線
   octx.beginPath();
   for(let x=1;x<S.w;x++){ const p=x*S.zoom; octx.moveTo(p,0); octx.lineTo(p,H); }
   for(let y=1;y<S.h;y++){ const p=y*S.zoom; octx.moveTo(0,p); octx.lineTo(W,p); }
   octx.stroke();
   if(S.zoom>=6){                                   // 8px ごとの補助線
-    octx.lineWidth=1; octx.strokeStyle='rgba(120,200,255,.55)'; octx.beginPath();
+    octx.lineWidth=1; octx.strokeStyle='rgba(0,110,200,.55)'; octx.beginPath();
     for(let x=8;x<S.w;x+=8){ const p=x*S.zoom; octx.moveTo(p,0); octx.lineTo(p,H); }
     for(let y=8;y<S.h;y+=8){ const p=y*S.zoom; octx.moveTo(0,p); octx.lineTo(W,p); }
     octx.stroke();
