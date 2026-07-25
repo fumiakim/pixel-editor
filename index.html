@@ -136,8 +136,12 @@
   <!-- 中央 -->
   <div id="center">
     <div id="topbar">
-      <button id="btnNew">新規</button>
-      <button id="btnResize">サイズ変更</button>
+      <button id="btnNew" title="新しいキャンバスを作る">新規</button>
+      <button id="btnResize" title="キャンバスのピクセル数を変更">サイズ</button>
+      <span style="width:1px;height:22px;background:var(--line)"></span>
+      <button id="btnLoadImg" title="PNG/JPEG などの画像を読み込んでドット絵にする">画像を読込</button>
+      <button id="btnLoad" title="保存した .json プロジェクトを開く">開く</button>
+      <button id="btnSave" title="プロジェクトを .json で保存 (⌘S)">保存</button>
       <span style="width:1px;height:22px;background:var(--line)"></span>
       <label>太さ</label>
       <select id="brush"><option>1</option><option>2</option><option>3</option><option>4</option></select>
@@ -146,7 +150,7 @@
       <button id="zoomOut">−</button><span id="zoomLabel" style="min-width:44px;text-align:center">1200%</span><button id="zoomIn">＋</button>
       <button id="zoomFit">フィット</button>
       <label><input type="checkbox" id="grid" checked> グリッド</label>
-      <label><input type="checkbox" id="onion"> オニオン</label>
+      <label title="前後のコマを薄く重ねて表示（前＝青／次＝赤）"><input type="checkbox" id="onion"> オニオン</label>
       <span id="pos">— , —</span>
     </div>
     <div id="stage">
@@ -221,13 +225,10 @@
     </div>
 
     <div class="box">
-      <h3>プロジェクト</h3>
-      <div class="row">
-        <button id="btnSave" style="flex:1">保存(.json)</button>
-        <button id="btnLoad" style="flex:1">読込</button>
-      </div>
+      <h3>ショートカット</h3>
       <input type="file" id="fileIn" accept="application/json,.json" style="display:none">
-      <div class="hint" style="margin-top:6px">
+      <input type="file" id="imgIn" accept="image/*" style="display:none">
+      <div class="hint">
         <kbd>B</kbd>ペン <kbd>E</kbd>消し <kbd>G</kbd>塗り <kbd>I</kbd>スポイト <kbd>L</kbd>線 <kbd>R</kbd>四角 <kbd>O</kbd>円 <kbd>M</kbd>移動<br>
         <kbd>⌘Z</kbd>戻す <kbd>⇧⌘Z</kbd>進む <kbd>[</kbd><kbd>]</kbd>コマ移動 <kbd>Space</kbd>再生<br>
         右ドラッグ＝消しゴム／<kbd>Alt</kbd>＋クリック＝スポイト
@@ -340,12 +341,21 @@ function frameToImageData(f){
   }
   return img;
 }
+// オニオンスキン用（前後のコマを単色に着色して薄く重ねる）
+const tint=document.createElement('canvas'), tctx=tint.getContext('2d');
+function drawOnionLayer(frame, color, alpha){
+  tint.width=S.w; tint.height=S.h;               // 代入でクリア＆状態リセット
+  tctx.putImageData(frameToImageData(frame),0,0);
+  tctx.globalCompositeOperation='source-atop';   // 不透明な画素だけを着色
+  tctx.fillStyle=color; tctx.fillRect(0,0,S.w,S.h);
+  ctx.globalAlpha=alpha; ctx.drawImage(tint,0,0); ctx.globalAlpha=1;
+}
 function drawCanvas(){
   ctx.clearRect(0,0,S.w,S.h);
-  if(S.onion && S.frames.length>1){
-    const prev=S.frames[(S.cur-1+S.frames.length)%S.frames.length];
-    octxOff.putImageData(frameToImageData(prev),0,0);
-    ctx.globalAlpha=.3; ctx.drawImage(off,0,0); ctx.globalAlpha=1;
+  const n=S.frames.length;
+  if(S.onion && n>1){
+    drawOnionLayer(S.frames[(S.cur-1+n)%n], '#2f7fff', .55);          // 前のコマ＝青
+    if(n>2) drawOnionLayer(S.frames[(S.cur+1)%n], '#ff3b3b', .40);    // 次のコマ＝赤
   }
   octxOff.putImageData(frameToImageData(S.frames[S.cur]),0,0);
   ctx.drawImage(off,0,0);
@@ -545,6 +555,12 @@ function renderFrames(){
   $('#btnAddFrame').disabled = S.frames.length>=MAX_FRAMES;
   $('#btnDupFrame').disabled = S.frames.length>=MAX_FRAMES;
   $('#btnDelFrame').disabled = S.frames.length<=1;
+  // コマが1つだけならオニオンは意味がないので無効化（押しても無反応に見えるのを防ぐ）
+  const ok=S.frames.length>1;
+  $('#onion').disabled=!ok;
+  $('#onion').parentElement.style.opacity = ok ? 1 : .4;
+  $('#onion').parentElement.title = ok ? '前後のコマを薄く重ねて表示（前＝青／次＝赤）'
+                                       : 'コマが2つ以上のときに使えます';
   drawPreview();
 }
 $('#btnAddFrame').onclick=()=>{ if(S.frames.length>=MAX_FRAMES) return; pushUndo(); S.frames.push(newFrame()); S.cur=S.frames.length-1; renderAll(); };
@@ -608,10 +624,112 @@ $('#exAll').onclick=()=>{ S.frames.forEach((f,i)=>setTimeout(()=>{
   const c=document.createElement('canvas'); renderTo(c,[f],+$('#exScale').value);
   download(c,`${exName()}_${i+1}.png`); }, i*250)); };
 
+/* ================= 画像の読み込み（減色して取り込み） ================= */
+// 中央値分割法で代表色を最大256色求める
+function medianCut(samples, want){
+  let boxes=[samples];
+  while(boxes.length<want){
+    let bi=-1, bw=-1;
+    boxes.forEach((b,i)=>{
+      if(b.length<2) return;
+      for(let ch=0;ch<3;ch++){
+        let mn=255,mx=0;
+        for(const p of b){ if(p[ch]<mn)mn=p[ch]; if(p[ch]>mx)mx=p[ch]; }
+        const w=mx-mn; if(w>bw){ bw=w; bi=i; }
+      }
+    });
+    if(bi<0||bw<=0) break;
+    const box=boxes[bi];
+    let ch=0, best=-1;
+    for(let c=0;c<3;c++){
+      let mn=255,mx=0;
+      for(const p of box){ if(p[c]<mn)mn=p[c]; if(p[c]>mx)mx=p[c]; }
+      if(mx-mn>best){ best=mx-mn; ch=c; }
+    }
+    box.sort((a,b)=>a[ch]-b[ch]);
+    const mid=box.length>>1;
+    boxes.splice(bi,1,box.slice(0,mid),box.slice(mid));
+  }
+  return boxes.filter(b=>b.length).map(b=>{
+    let r=0,g=0,bl=0;
+    for(const p of b){ r+=p[0]; g+=p[1]; bl+=p[2]; }
+    return [Math.round(r/b.length),Math.round(g/b.length),Math.round(bl/b.length)];
+  });
+}
+function nearestIndex(r,g,b,cache){
+  const key=(r<<16)|(g<<8)|b;
+  const hit=cache.get(key); if(hit!==undefined) return hit;
+  let best=0, bd=Infinity;
+  for(let i=0;i<S.palette.length;i++){
+    const c=S.palette[i];
+    const d=(c[0]-r)**2*0.3+(c[1]-g)**2*0.59+(c[2]-b)**2*0.11;
+    if(d<bd){ bd=d; best=i; }
+  }
+  cache.set(key,best); return best;
+}
+function importImage(img){
+  const MAX=512;
+  let iw=img.naturalWidth, ih=img.naturalHeight;
+  const sc=Math.min(1, MAX/iw, MAX/ih);
+  const w=Math.max(1,Math.round(iw*sc)), h=Math.max(1,Math.round(ih*sc));
+  const msg=`画像 ${iw}×${ih}px を読み込みます。\n\n`
+    + (sc<1 ? `・上限512pxのため ${w}×${h}px に縮小します\n` : '')
+    + `・キャンバスを ${w}×${h}px に変更します\n`
+    + `・現在のコマ（${S.cur+1}コマ目）に取り込みます\n\n続けますか？`;
+  if(!confirm(msg)) return;
+  const makePalette = confirm('画像に合わせて256色パレットを自動生成しますか？\n\nOK ＝ 自動生成（現在のパレットは置き換わります）\nキャンセル ＝ 現在のパレットのまま減色');
+
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  const g=c.getContext('2d');
+  g.imageSmoothingEnabled = sc<1;       // 縮小時のみ補間、等倍ならドットを保つ
+  g.drawImage(img,0,0,w,h);
+  const src=g.getImageData(0,0,w,h).data;
+
+  pushUndo();
+  if(makePalette){
+    const samples=[];
+    const stride=Math.max(1, Math.floor((w*h)/60000));
+    for(let i=0;i<w*h;i+=stride){
+      if(src[i*4+3]<128) continue;
+      samples.push([src[i*4],src[i*4+1],src[i*4+2]]);
+    }
+    if(samples.length){
+      const pal=medianCut(samples,256);
+      while(pal.length<256) pal.push([0,0,0]);
+      S.palette=pal.slice(0,256);
+      buildPalette();
+    }
+  }
+  // キャンバスサイズを画像に合わせる（他のコマは左上基準で維持）
+  const ow=S.w, oh=S.h, old=S.frames;
+  S.w=w; S.h=h;
+  S.frames=old.map(f=>{
+    const n=newFrame(w,h);
+    for(let y=0;y<Math.min(h,oh);y++) for(let x=0;x<Math.min(w,ow);x++) n[y*w+x]=f[y*ow+x];
+    return n;
+  });
+  const dst=S.frames[S.cur], cache=new Map();
+  for(let i=0;i<w*h;i++){
+    dst[i] = src[i*4+3]<128 ? TRANSPARENT
+           : nearestIndex(src[i*4],src[i*4+1],src[i*4+2],cache);
+  }
+  userZoomed=false; fitZoom(); layout(); renderAll();
+}
+$('#btnLoadImg').onclick=()=>$('#imgIn').click();
+$('#imgIn').onchange=e=>{
+  const file=e.target.files[0]; e.target.value='';
+  if(!file) return;
+  const url=URL.createObjectURL(file);
+  const img=new Image();
+  img.onload=()=>{ try{ importImage(img); } finally { URL.revokeObjectURL(url); } };
+  img.onerror=()=>{ URL.revokeObjectURL(url); alert('画像を読み込めませんでした。'); };
+  img.src=url;
+};
+
 /* ================= 保存・読込 ================= */
 function serialize(){
   return JSON.stringify({
-    v:1, w:S.w, h:S.h, fps:+$('#fps').value, sel:S.sel,
+    v:1, w:S.w, h:S.h, fps:+$('#fps').value, sel:S.sel, onion:S.onion,
     palette:S.palette, frames:S.frames.map(f=>Array.from(f))
   });
 }
@@ -624,6 +742,7 @@ function load(json){
   if(!S.frames.length) S.frames=[newFrame()];
   S.cur=0; S.sel=Math.min(Math.max(0, d.sel ?? S.sel), 255);
   if(d.fps) $('#fps').value=d.fps;
+  S.onion=!!d.onion; $('#onion').checked=S.onion;
   undoStack=[]; redoStack=[]; updUndo();
   fitZoom(); layout(); buildPalette(); renderAll();
 }
@@ -720,7 +839,7 @@ updUndo();
 // 初回レイアウト確定後にフィット（file:// 直開き時に stage 実寸が遅れて確定するため）
 requestAnimationFrame(()=>{ fitZoom(); layout(); });
 // デバッグ／外部連携用フック
-window.DOT = { S, renderTo, frameToImageData, load, serialize };
+window.DOT = { S, renderTo, frameToImageData, load, serialize, importImage };
 </script>
 </body>
 </html>
