@@ -130,6 +130,9 @@
     background-color:var(--chk1);
     background-image:linear-gradient(45deg,var(--chk2) 25%,transparent 25%),linear-gradient(-45deg,var(--chk2) 25%,transparent 25%),linear-gradient(45deg,transparent 75%,var(--chk2) 75%),linear-gradient(-45deg,transparent 75%,var(--chk2) 75%);
     background-size:12px 12px; background-position:0 0,0 6px,6px -6px,-6px 0;}
+  .sgroup{grid-column:1/-1; font-size:12px; font-weight:700; color:var(--accent2);
+    letter-spacing:.06em; margin-top:6px; padding-bottom:4px; border-bottom:1px solid var(--line)}
+  .sgroup:first-child{margin-top:0}
   .samp b{display:block; margin-top:6px; font-size:12px; font-weight:600}
   .samp small{display:block; color:var(--dim); font-size:10px}
 </style>
@@ -1391,6 +1394,295 @@ const SAMPLES=[
   "....yyyyyyyy....",
   ".....yooooy.....",
   "......oooo......"]]},
+
+/* ---- ここからカッコいい系 ---- */
+{ name:'ドラゴン', tip:'ほのおを はく', group:'カッコいい',
+  colors:{v:'#7b3fd4', d:'#4a1f8a', y:'#ffd24d', r:'#ff5c3c'},
+  frames:[[
+  "..d..........d..",
+  "..dd........dd..",
+  "..ddd......ddd..",
+  "..dvvvvvvvvvvd..",
+  "..vvvvvvvvvvvv..",
+  "..vvyyvvvvyyvv..",
+  "..vvyyvvvvyyvv..",
+  ".vvvvvvvvvvvvvv.",
+  ".vvvvvvvvvvvvvv.",
+  "..vvvvvvvvvvvv..",
+  "..vvddddddddvv..",
+  "...vvvvvvvvvv...",
+  ".....rrrrrr.....",
+  "....rryyyyrr....",
+  ".....ryyyyr.....",
+  "......rrrr......"],[
+  "..d..........d..",
+  "..dd........dd..",
+  "..ddd......ddd..",
+  "..dvvvvvvvvvvd..",
+  "..vvvvvvvvvvvv..",
+  "..vvrrvvvvrrvv..",
+  "..vvrrvvvvrrvv..",
+  ".vvvvvvvvvvvvvv.",
+  ".vvvvvvvvvvvvvv.",
+  "..vvvvvvvvvvvv..",
+  "..vvddddddddvv..",
+  "...vvvvvvvvvv...",
+  "....rrrrrrrr....",
+  "...rryyyyyyrr...",
+  "....ryyyyyyr....",
+  ".....rryyrr....."]]},
+
+{ name:'ナイト', tip:'けんを ふりおろす', group:'カッコいい',
+  colors:{s:'#8ea3c4', d:'#44506b', b:'#e03a3a', y:'#ffd24d', w:'#eaf2ff', K:'#141820'},
+  frames:[[
+  "..........dw....",
+  "....bb....dw....",
+  "...ssss...dw....",
+  "...sKKs...dw....",
+  "...ssss...dw....",
+  "..ssssss..dw....",
+  "..ssssss.yyyy...",
+  "..dssssdss......",
+  "..dssssd........",
+  "...ssss.........",
+  "...ssss.........",
+  "...ssss.........",
+  "...ss.ss........",
+  "...ss.ss........",
+  "..ddd.ddd.......",
+  "................"],[
+  "................",
+  "....bb..........",
+  "...ssss.........",
+  "...sKKs.........",
+  "...ssss.........",
+  "..ssssss........",
+  "..ssssss.y......",
+  "..dssssdsywwwwww",
+  "..dssssd.ydddddd",
+  "...ssss.........",
+  "...ssss.........",
+  "...ssss.........",
+  "...ss.ss........",
+  "...ss.ss........",
+  "..ddd.ddd.......",
+  "................"]]},
+
+{ name:'にんじゃ', tip:'しゅりけんを なげる', group:'カッコいい',
+  colors:{K:'#1e2230', d:'#0e1018', w:'#f0f4ff', r:'#d03030', s:'#9aa4b8'},
+  frames:[[
+  "..............s.",
+  ".....KKKKKK..sss",
+  "....KKKKKKKK..s.",
+  "....KwwKKwwK....",
+  "....KKKKKKKK....",
+  "...rKKKKKKKKr...",
+  "..rrKKKKKKKKrr..",
+  "....KKKKKKKK....",
+  "...KKKKKKKKKK...",
+  "...KKKKKKKKKK...",
+  "....KKKKKKKK....",
+  "....KKKKKKKK....",
+  "....KKK..KKK....",
+  "....KKK..KKK....",
+  "...ddd....ddd...",
+  "................"],[
+  "................",
+  ".....KKKKKK.....",
+  "....KKKKKKKK....",
+  "....KwwKKwwK....",
+  "....KKKKKKKK....",
+  "..rrKKKKKKKKr...",
+  ".rr.KKKKKKKKrr..",
+  "....KKKKKKKK....",
+  "...KKKKKKKKKK...",
+  "...KKKKKKKKKK.s.",
+  "....KKKKKKKK.sss",
+  "....KKKKKKKK..s.",
+  "....KKK..KKK....",
+  "....KKK..KKK....",
+  "...ddd....ddd...",
+  "................"]]},
+
+{ name:'ガイコツ', tip:'めが あかく ひかる', group:'カッコいい',
+  colors:{w:'#eef0f4', s:'#b4bac6', K:'#12141c', r:'#ff3b3b'},
+  frames:[[
+  "................",
+  "....wwwwwwww....",
+  "...wwwwwwwwww...",
+  "..wwwwwwwwwwww..",
+  "..wwKKKwwKKKww..",
+  "..wwKKKwwKKKww..",
+  "..wwwwwwwwwwww..",
+  "..wwwwwKKwwwww..",
+  "...wwwwwwwwww...",
+  "...wwwwwwwwww...",
+  "...wKwKwKwKww...",
+  "....wwwwwwww....",
+  "................",
+  "................",
+  "................",
+  "................"],[
+  "................",
+  "....wwwwwwww....",
+  "...wwwwwwwwww...",
+  "..wwwwwwwwwwww..",
+  "..wwrrrwwrrrww..",
+  "..wwrrrwwrrrww..",
+  "..wwwwwwwwwwww..",
+  "..wwwwwKKwwwww..",
+  "...wwwwwwwwww...",
+  "...wwwwwwwwww...",
+  "................",
+  "...wKwKwKwKww...",
+  "....wwwwwwww....",
+  "................",
+  "................",
+  "................"]]},
+
+{ name:'オオカミ', tip:'とおぼえ する', group:'カッコいい',
+  colors:{g:'#6b7280', d:'#3f4552', w:'#e8ecf2', y:'#ffd24d', K:'#101318'},
+  frames:[[
+  "..gg........gg..",
+  "..ggg......ggg..",
+  "..gggg....gggg..",
+  "..gggggggggggg..",
+  ".gggggggggggggg.",
+  ".ggyyggggggyygg.",
+  ".gggggggggggggg.",
+  "..ggggwwwwgggg..",
+  "..gggwwwwwwggg..",
+  "...wwwwKKwwww...",
+  "...wwwwwwwwww...",
+  "....wwwwwwww....",
+  ".....wwwwww.....",
+  "......dddd......",
+  "................",
+  "................"],[
+  "..ggg......ggg..",
+  "..ggg......ggg..",
+  "..gggg....gggg..",
+  "..gggggggggggg..",
+  ".gggggggggggggg.",
+  ".ggyyggggggyygg.",
+  ".gggggggggggggg.",
+  "..ggggwwwwgggg..",
+  "..gggwwwwwwggg..",
+  "...wwwwKKwwww...",
+  "...wwwwwwwwww...",
+  "....wwKKKKww....",
+  ".....wKKKKw.....",
+  "......dddd......",
+  "................",
+  "................"]]},
+
+{ name:'サメ', tip:'しっぽで およぐ', group:'カッコいい',
+  colors:{b:'#5a7fa8', d:'#3a5a7d', w:'#ffffff', K:'#101820'},
+  frames:[[
+  "................",
+  "................",
+  "......bb........",
+  ".....bbbb.......",
+  "...bbbbbbbbbb..d",
+  ".bbbbbbbbbbbb.dd",
+  "bbKbbbbbbbbbbddd",
+  "bwwwwbbbbbbbbddd",
+  ".bwwwbbbbbbbb.dd",
+  "..bbbbbbbbbb...d",
+  "....bbbbbb......",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................"],[
+  "................",
+  "................",
+  "......bb........",
+  ".....bbbb.......",
+  "...bbbbbbbbbb...",
+  ".bbbbbbbbbbbb..d",
+  "bbKbbbbbbbbbb.dd",
+  "bwwwwbbbbbbbbddd",
+  ".bwwwbbbbbbbbddd",
+  "..bbbbbbbbbb.ddd",
+  "....bbbbbb...dd.",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................"]]},
+
+{ name:'まほうつかい', tip:'つえが ひかる', group:'カッコいい',
+  colors:{v:'#5b3fd4', d:'#3a2590', w:'#f0e6d0', K:'#1a1420', y:'#ffe14d', s:'#c8a86a'},
+  frames:[[
+  ".......v........",
+  "......vvv.......",
+  ".....vvvvv......",
+  "....vvvvvvv.....",
+  "...vvvvvvvvv....",
+  "..vvvvvvvvvvv...",
+  "....wwwwwww.....",
+  "....wKwwwKw.....",
+  "....wwwwwww...y.",
+  "...vvvvvvvvv..s.",
+  "..vvvvvvvvvvv.s.",
+  "..vvvvvvvvvvv.s.",
+  ".vvvvvvvvvvvvvs.",
+  ".vvvvvvvvvvvvvs.",
+  "vvvvvvvvvvvvvvs.",
+  "................"],[
+  "......v.........",
+  "......vvv.......",
+  ".....vvvvv......",
+  "....vvvvvvv.....",
+  "...vvvvvvvvv....",
+  "..vvvvvvvvvvv...",
+  "....wwwwwww.....",
+  "....wKwwwKw...y.",
+  "....wwwwwww..yyy",
+  "...vvvvvvvvv..y.",
+  "..vvvvvvvvvvv.s.",
+  "..vvvvvvvvvvv.s.",
+  ".vvvvvvvvvvvvvs.",
+  ".vvvvvvvvvvvvvs.",
+  "vvvvvvvvvvvvvvs.",
+  "................"]]},
+
+{ name:'ジェットき', tip:'ふんしゃ ぜんかい', group:'カッコいい',
+  colors:{s:'#c8d2e0', d:'#7a8698', c:'#7fe6ff', r:'#ff4d4d', y:'#ffd24d', o:'#ff7a1f'},
+  frames:[[
+  ".......ss.......",
+  ".......ss.......",
+  "......ssss......",
+  "......sccs......",
+  "......sccs......",
+  "......ssss......",
+  ".dddddssssddddd.",
+  "..ddddssssdddd..",
+  "...dddssssddd...",
+  "......ssss......",
+  "......ssss......",
+  "......srrs......",
+  ".....ssssss.....",
+  "....s.ssss.s....",
+  "......yyyy......",
+  ".......oo......."],[
+  ".......ss.......",
+  ".......ss.......",
+  "......ssss......",
+  "......sccs......",
+  "......sccs......",
+  "......ssss......",
+  ".dddddssssddddd.",
+  "..ddddssssdddd..",
+  "...dddssssddd...",
+  "......ssss......",
+  "......ssss......",
+  "......srrs......",
+  ".....ssssss.....",
+  "....s.ssss.s....",
+  ".....yyyyyy.....",
+  "......oooo......"]]},
 ];
 
 // サンプルの色を、既定パレットのいちばん近いスロットへ「実際の色として」書き込む。
@@ -1446,7 +1738,14 @@ function drawSample(canvas, s, fi){
 let sampleTimer=null;
 function openSamples(){
   const list=$('#sampleList'); list.innerHTML='';
-  const items=SAMPLES.map(s=>{
+  const items=[];
+  let lastGroup=null;
+  for(const s of SAMPLES){
+    const grp=s.group||'かわいい';
+    if(grp!==lastGroup){                       // ジャンルの見出し（グリッド全幅）
+      const h=document.createElement('div'); h.className='sgroup'; h.textContent=grp;
+      list.appendChild(h); lastGroup=grp;
+    }
     const b=document.createElement('button'); b.className='samp'; b.type='button';
     const c=document.createElement('canvas');
     const nm=document.createElement('b'); nm.textContent=s.name;
@@ -1454,8 +1753,8 @@ function openSamples(){
     b.append(c,nm,tp); b.onclick=()=>loadSample(s);
     list.appendChild(b);
     drawSample(c,s,0);
-    return {c,s};
-  });
+    items.push({c,s});
+  }
   let t=0;
   clearInterval(sampleTimer);
   sampleTimer=setInterval(()=>{ t++; items.forEach(it=>drawSample(it.c,it.s,t)); }, 380);
