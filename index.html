@@ -130,9 +130,6 @@
     background-color:var(--chk1);
     background-image:linear-gradient(45deg,var(--chk2) 25%,transparent 25%),linear-gradient(-45deg,var(--chk2) 25%,transparent 25%),linear-gradient(45deg,transparent 75%,var(--chk2) 75%),linear-gradient(-45deg,transparent 75%,var(--chk2) 75%);
     background-size:12px 12px; background-position:0 0,0 6px,6px -6px,-6px 0;}
-  .sgroup{grid-column:1/-1; font-size:12px; font-weight:700; color:var(--accent2);
-    letter-spacing:.06em; margin-top:6px; padding-bottom:4px; border-bottom:1px solid var(--line)}
-  .sgroup:first-child{margin-top:0}
   .samp b{display:block; margin-top:6px; font-size:12px; font-weight:600}
   .samp small{display:block; color:var(--dim); font-size:10px}
 </style>
@@ -1395,8 +1392,7 @@ const SAMPLES=[
   ".....yooooy.....",
   "......oooo......"]]},
 
-/* ---- ここからカッコいい系 ---- */
-{ name:'ドラゴン', tip:'ほのおを はく', group:'カッコいい',
+{ name:'ドラゴン', tip:'ほのおを はく',
   colors:{v:'#7b3fd4', d:'#4a1f8a', y:'#ffd24d', r:'#ff5c3c'},
   frames:[[
   "..d..........d..",
@@ -1432,7 +1428,7 @@ const SAMPLES=[
   "....ryyyyyyr....",
   ".....rryyrr....."]]},
 
-{ name:'ナイト', tip:'けんを ふりおろす', group:'カッコいい',
+{ name:'ナイト', tip:'けんを ふりおろす',
   colors:{s:'#8ea3c4', d:'#44506b', b:'#e03a3a', y:'#ffd24d', w:'#eaf2ff', K:'#141820'},
   frames:[[
   "..........dw....",
@@ -1468,7 +1464,7 @@ const SAMPLES=[
   "..ddd.ddd.......",
   "................"]]},
 
-{ name:'にんじゃ', tip:'しゅりけんを なげる', group:'カッコいい',
+{ name:'にんじゃ', tip:'しゅりけんを なげる',
   colors:{K:'#1e2230', d:'#0e1018', w:'#f0f4ff', r:'#d03030', s:'#9aa4b8'},
   frames:[[
   "..............s.",
@@ -1504,7 +1500,7 @@ const SAMPLES=[
   "...ddd....ddd...",
   "................"]]},
 
-{ name:'ガイコツ', tip:'めが あかく ひかる', group:'カッコいい',
+{ name:'ガイコツ', tip:'めが あかく ひかる',
   colors:{w:'#eef0f4', s:'#b4bac6', K:'#12141c', r:'#ff3b3b'},
   frames:[[
   "................",
@@ -1540,7 +1536,7 @@ const SAMPLES=[
   "................",
   "................"]]},
 
-{ name:'オオカミ', tip:'とおぼえ する', group:'カッコいい',
+{ name:'オオカミ', tip:'とおぼえ する',
   colors:{g:'#6b7280', d:'#3f4552', w:'#e8ecf2', y:'#ffd24d', K:'#101318'},
   frames:[[
   "..gg........gg..",
@@ -1576,7 +1572,7 @@ const SAMPLES=[
   "................",
   "................"]]},
 
-{ name:'サメ', tip:'しっぽで およぐ', group:'カッコいい',
+{ name:'サメ', tip:'しっぽで およぐ',
   colors:{b:'#5a7fa8', d:'#3a5a7d', w:'#ffffff', K:'#101820'},
   frames:[[
   "................",
@@ -1612,7 +1608,7 @@ const SAMPLES=[
   "................",
   "................"]]},
 
-{ name:'まほうつかい', tip:'つえが ひかる', group:'カッコいい',
+{ name:'まほうつかい', tip:'つえが ひかる',
   colors:{v:'#5b3fd4', d:'#3a2590', w:'#f0e6d0', K:'#1a1420', y:'#ffe14d', s:'#c8a86a'},
   frames:[[
   ".......v........",
@@ -1648,7 +1644,7 @@ const SAMPLES=[
   "vvvvvvvvvvvvvvs.",
   "................"]]},
 
-{ name:'ジェットき', tip:'ふんしゃ ぜんかい', group:'カッコいい',
+{ name:'ジェットき', tip:'ふんしゃ ぜんかい',
   colors:{s:'#c8d2e0', d:'#7a8698', c:'#7fe6ff', r:'#ff4d4d', y:'#ffd24d', o:'#ff7a1f'},
   frames:[[
   ".......ss.......",
@@ -1738,14 +1734,7 @@ function drawSample(canvas, s, fi){
 let sampleTimer=null;
 function openSamples(){
   const list=$('#sampleList'); list.innerHTML='';
-  const items=[];
-  let lastGroup=null;
-  for(const s of SAMPLES){
-    const grp=s.group||'かわいい';
-    if(grp!==lastGroup){                       // ジャンルの見出し（グリッド全幅）
-      const h=document.createElement('div'); h.className='sgroup'; h.textContent=grp;
-      list.appendChild(h); lastGroup=grp;
-    }
+  const items=SAMPLES.map(s=>{
     const b=document.createElement('button'); b.className='samp'; b.type='button';
     const c=document.createElement('canvas');
     const nm=document.createElement('b'); nm.textContent=s.name;
@@ -1753,8 +1742,8 @@ function openSamples(){
     b.append(c,nm,tp); b.onclick=()=>loadSample(s);
     list.appendChild(b);
     drawSample(c,s,0);
-    items.push({c,s});
-  }
+    return {c,s};
+  });
   let t=0;
   clearInterval(sampleTimer);
   sampleTimer=setInterval(()=>{ t++; items.forEach(it=>drawSample(it.c,it.s,t)); }, 380);
