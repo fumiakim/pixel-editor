@@ -79,6 +79,9 @@
   /* .primary は #side .box button より詳細度が低いので、同等の指定で上書きする */
   button.primary, #side .box button.primary{background:var(--accent); color:#12161c; border-color:#8fd7ff; font-weight:700}
   button.primary:hover, #side .box button.primary:hover{background:#7cd0ff}
+  button.primary2, #side .box button.primary2{background:var(--accent2); color:#231702; border-color:#ffd08f; font-weight:700}
+  button.primary2:hover, #side .box button.primary2:hover{background:#ffc470}
+  button.primary2:disabled, #side .box button.primary2:disabled{background:var(--accent2)}
   button:disabled{opacity:.35; cursor:default}
   input[type=number]{width:62px; cursor:text}
   label{color:var(--dim); font-size:11px}
@@ -209,7 +212,7 @@
     </div>
 
     <div class="box">
-      <h3>PNG書き出し</h3>
+      <h3>PNG / APNG 書き出し</h3>
       <div class="row">
         <label>倍率</label>
         <select id="exScale">
@@ -221,7 +224,12 @@
       <div class="row"><button class="primary" id="exCur" style="flex:1">現在のコマを書き出し</button></div>
       <div class="row"><button id="exSheet" style="flex:1">スプライトシート（横並び）</button></div>
       <div class="row"><button id="exAll" style="flex:1">全コマを個別に書き出し</button></div>
-      <div class="hint" style="margin-top:4px">未描画部分は透明（アルファ0）で出力されます。</div>
+      <div class="row" style="margin-top:8px"><button class="primary2" id="exApng" style="flex:1">APNG（動くPNG）で書き出し</button></div>
+      <div class="hint" style="margin-top:4px">
+        未描画部分は透明（アルファ0）で出力されます。<br>
+        APNG は上の <b>FPS</b> の値で無限ループします。拡張子は <code>.png</code> のままで、
+        主要ブラウザでそのままアニメーション再生できます。
+      </div>
     </div>
 
     <div class="box">
@@ -624,6 +632,118 @@ $('#exAll').onclick=()=>{ S.frames.forEach((f,i)=>setTimeout(()=>{
   const c=document.createElement('canvas'); renderTo(c,[f],+$('#exScale').value);
   download(c,`${exName()}_${i+1}.png`); }, i*250)); };
 
+/* ================= APNG（アニメーションPNG）書き出し ================= */
+// 仕様: https://wiki.mozilla.org/APNG_Specification
+const CRC_TABLE=(()=>{ const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){ let c=n;
+    for(let k=0;k<8;k++) c = (c&1) ? (0xedb88320 ^ (c>>>1)) : (c>>>1);
+    t[n]=c>>>0; }
+  return t; })();
+function crc32(buf){
+  let c=0xffffffff;
+  for(let i=0;i<buf.length;i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c>>>8);
+  return (c ^ 0xffffffff)>>>0;
+}
+function pngChunk(type, data){
+  const out=new Uint8Array(12+data.length), dv=new DataView(out.buffer);
+  dv.setUint32(0, data.length);
+  for(let i=0;i<4;i++) out[4+i]=type.charCodeAt(i);
+  out.set(data, 8);
+  dv.setUint32(8+data.length, crc32(out.subarray(4, 8+data.length)));
+  return out;
+}
+// 非圧縮(stored)ブロックだけの zlib ストリーム。CompressionStream 非対応環境用の代替。
+function zlibStored(bytes){
+  const N=Math.ceil(bytes.length/65535) || 1;
+  const out=new Uint8Array(2 + N*5 + bytes.length);
+  out[0]=0x78; out[1]=0x01; let p=2, off=0;
+  for(let i=0;i<N;i++){
+    const len=Math.min(65535, bytes.length-off), last=(i===N-1)?1:0;
+    out[p++]=last; out[p++]=len&255; out[p++]=len>>8; out[p++]=(~len)&255; out[p++]=((~len)>>8)&255;
+    out.set(bytes.subarray(off,off+len), p); p+=len; off+=len;
+  }
+  let a=1,b=0;
+  for(let i=0;i<bytes.length;i++){ a=(a+bytes[i])%65521; b=(b+a)%65521; }
+  const dv=new DataView(out.buffer); dv.setUint32(out.length-4, ((b<<16)|a)>>>0);
+  return out;
+}
+async function zlibDeflate(bytes){
+  if(typeof CompressionStream==='undefined') return zlibStored(bytes);
+  try{
+    const s=new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate'));
+    return new Uint8Array(await new Response(s).arrayBuffer());
+  }catch(e){ return zlibStored(bytes); }
+}
+// 1コマ分を PNG のフィルタ付き生データ（各行の先頭に filter=0）へ。scale倍に最近傍拡大。
+function frameToRaw(f, scale){
+  const w=S.w*scale, h=S.h*scale, stride=1+w*4;
+  const raw=new Uint8Array(stride*h);
+  for(let y=0;y<h;y++){
+    const sy=(y/scale)|0, base=y*stride+1;
+    raw[y*stride]=0;                       // filter type: None
+    for(let x=0;x<w;x++){
+      const idx=f[sy*S.w+((x/scale)|0)], o=base+x*4;
+      if(idx<0) continue;                  // 透明（0のまま = RGBA すべて0）
+      const c=S.palette[idx]||[0,0,0];
+      raw[o]=c[0]; raw[o+1]=c[1]; raw[o+2]=c[2]; raw[o+3]=255;
+    }
+  }
+  return raw;
+}
+async function buildAPNG(frames, scale, fps, loops){
+  const w=S.w*scale, h=S.h*scale;
+  const parts=[new Uint8Array([137,80,78,71,13,10,26,10])];   // PNG シグネチャ
+
+  const ihdr=new Uint8Array(13), idv=new DataView(ihdr.buffer);
+  idv.setUint32(0,w); idv.setUint32(4,h);
+  ihdr[8]=8; ihdr[9]=6; ihdr[10]=0; ihdr[11]=0; ihdr[12]=0;    // 8bit / RGBA / 無圧縮以外の指定なし
+  parts.push(pngChunk('IHDR', ihdr));
+
+  const actl=new Uint8Array(8), advd=new DataView(actl.buffer);
+  advd.setUint32(0, frames.length); advd.setUint32(4, loops);  // loops=0 は無限ループ
+  parts.push(pngChunk('acTL', actl));
+
+  const delayNum=Math.max(1, Math.round(1000/fps));
+  let seq=0;
+  for(let i=0;i<frames.length;i++){
+    const fctl=new Uint8Array(26), fdv=new DataView(fctl.buffer);
+    fdv.setUint32(0, seq++); fdv.setUint32(4, w); fdv.setUint32(8, h);
+    fdv.setUint32(12, 0); fdv.setUint32(16, 0);                // x/y オフセット
+    fdv.setUint16(20, delayNum); fdv.setUint16(22, 1000);      // 表示時間 = delayNum/1000 秒
+    fctl[24]=1;  // dispose_op = BACKGROUND（次のコマの前に透明へ戻す）
+    fctl[25]=0;  // blend_op   = SOURCE（アルファ込みで置き換え）
+    parts.push(pngChunk('fcTL', fctl));
+
+    const z=await zlibDeflate(frameToRaw(frames[i], scale));
+    if(i===0){
+      parts.push(pngChunk('IDAT', z));
+    }else{
+      const fd=new Uint8Array(4+z.length);
+      new DataView(fd.buffer).setUint32(0, seq++);
+      fd.set(z,4);
+      parts.push(pngChunk('fdAT', fd));
+    }
+  }
+  parts.push(pngChunk('IEND', new Uint8Array(0)));
+  return new Blob(parts, {type:'image/apng'});
+}
+function downloadBlob(blob, name){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=name;
+  a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+}
+$('#exApng').onclick=async()=>{
+  const btn=$('#exApng'), label=btn.textContent;
+  btn.disabled=true; btn.textContent='作成中…';
+  try{
+    const fps=Math.max(1, +$('#fps').value)||8;
+    const blob=await buildAPNG(S.frames, +$('#exScale').value, fps, 0);
+    downloadBlob(blob, `${exName()}_anim_${S.frames.length}f.png`);
+  }catch(e){
+    alert('APNGの書き出しに失敗しました: '+e.message);
+  }finally{ btn.disabled=false; btn.textContent=label; }
+};
+
 /* ================= 画像の読み込み（減色して取り込み） ================= */
 // 中央値分割法で代表色を最大256色求める
 function medianCut(samples, want){
@@ -839,7 +959,7 @@ updUndo();
 // 初回レイアウト確定後にフィット（file:// 直開き時に stage 実寸が遅れて確定するため）
 requestAnimationFrame(()=>{ fitZoom(); layout(); });
 // デバッグ／外部連携用フック
-window.DOT = { S, renderTo, frameToImageData, load, serialize, importImage };
+window.DOT = { S, renderTo, frameToImageData, load, serialize, importImage, buildAPNG };
 </script>
 </body>
 </html>
