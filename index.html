@@ -115,6 +115,23 @@
   #modal.on{display:flex}
   #modal .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; width:320px}
   #modal h2{margin:0 0 12px; font-size:14px}
+
+  /* サンプルギャラリー */
+  #smodal{position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:60}
+  #smodal.on{display:flex}
+  #smodal .card{background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:18px; width:min(560px,92vw); max-height:88vh; overflow:auto}
+  #smodal h2{margin:0 0 4px; font-size:15px}
+  #sampleList{display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:10px; margin-top:12px}
+  .samp{background:var(--panel2); border:2px solid var(--line); border-radius:10px; padding:8px 4px;
+    text-align:center; cursor:pointer; color:var(--fg); font:inherit}
+  .samp:hover{border-color:var(--accent); background:#3a4050}
+  .samp canvas{width:76px; height:76px; image-rendering:pixelated; border-radius:6px;
+    background-color:var(--chk1);
+    background-image:linear-gradient(45deg,var(--chk2) 25%,transparent 25%),linear-gradient(-45deg,var(--chk2) 25%,transparent 25%),linear-gradient(45deg,transparent 75%,var(--chk2) 75%),linear-gradient(-45deg,transparent 75%,var(--chk2) 75%);
+    background-size:12px 12px; background-position:0 0,0 6px,6px -6px,-6px 0;}
+  .samp b{display:block; margin-top:6px; font-size:12px; font-weight:600}
+  .samp small{display:block; color:var(--dim); font-size:10px}
 </style>
 </head>
 <body>
@@ -141,6 +158,7 @@
     <div id="topbar">
       <button id="btnNew" title="新しいキャンバスを作る">新規</button>
       <button id="btnResize" title="キャンバスのピクセル数を変更">サイズ</button>
+      <button class="primary2" id="btnSamples" title="お手本のキャラクターを読み込む">サンプル</button>
       <span style="width:1px;height:22px;background:var(--line)"></span>
       <button id="btnLoadImg" title="PNG/JPEG などの画像を読み込んでドット絵にする">画像を読込</button>
       <button id="btnLoad" title="保存した .json プロジェクトを開く">開く</button>
@@ -243,6 +261,21 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- サンプルギャラリー -->
+<div id="smodal">
+  <div class="card">
+    <h2>サンプル ― クリックでよみこみ</h2>
+    <div class="hint">
+      すきなキャラクターをえらんでね。よみこむと、いまの絵とパレットは入れかわります（<kbd>⌘Z</kbd>で元にもどせます）。<br>
+      どれも 16×16 ドット・2コマのアニメーションです。▶ 再生ボタンで動かしてみよう。
+    </div>
+    <div id="sampleList"></div>
+    <div class="row" style="margin-top:14px; justify-content:flex-end">
+      <button id="sCancel">とじる</button>
+    </div>
   </div>
 </div>
 
@@ -440,10 +473,16 @@ function floodFill(f,x,y,v){
 
 /* ================= Undo / Redo ================= */
 function snapshot(){
-  return { w:S.w, h:S.h, cur:S.cur, frames:S.frames.map(f=>Int16Array.from(f)) };
+  return { w:S.w, h:S.h, cur:S.cur, frames:S.frames.map(f=>Int16Array.from(f)),
+           palette:S.palette.map(c=>c.slice()) };
 }
 function pushUndo(){ undoStack.push(snapshot()); if(undoStack.length>60) undoStack.shift(); redoStack=[]; updUndo(); }
-function applySnap(s){ S.w=s.w; S.h=s.h; S.frames=s.frames.map(f=>Int16Array.from(f)); S.cur=Math.min(s.cur,S.frames.length-1); layout(); renderAll(); }
+function applySnap(s){
+  S.w=s.w; S.h=s.h; S.frames=s.frames.map(f=>Int16Array.from(f));
+  S.cur=Math.min(s.cur,S.frames.length-1);
+  if(s.palette){ S.palette=s.palette.map(c=>c.slice()); buildPalette(); }
+  layout(); renderAll();
+}
 function undo(){ if(!undoStack.length) return; redoStack.push(snapshot()); applySnap(undoStack.pop()); updUndo(); }
 function redo(){ if(!redoStack.length) return; undoStack.push(snapshot()); applySnap(redoStack.pop()); updUndo(); }
 function updUndo(){ $('#btnUndo').disabled=!undoStack.length; $('#btnRedo').disabled=!redoStack.length; }
@@ -846,6 +885,299 @@ $('#imgIn').onchange=e=>{
   img.src=url;
 };
 
+/* ================= サンプル（お手本キャラクター） =================
+   '.' は透明。1文字＝1ドット。colors の文字と色を対応させている。      */
+const SAMPLES=[
+{ name:'ねこ', tip:'しっぽとまばたき',
+  colors:{o:'#f0a03c', d:'#c07020', K:'#2a1a10', P:'#ff9fb0'},
+  frames:[[
+  "................",
+  "...d........d...",
+  "..ddd......ddd..",
+  ".dooooooooooood.",
+  ".oooooooooooooo.",
+  ".ooKKoooooKKooo.",
+  ".ooKKoooooKKooo.",
+  ".ooooooPPoooooo.",
+  ".oooooKooKooooo.",
+  "..oooooooooooo..",
+  "...oooooooooo...",
+  "...oooooooooo...",
+  "...oooooooooodd.",
+  "...oooooooooo..d",
+  "...dd......dd...",
+  "................"],[
+  "................",
+  "...d........d...",
+  "..ddd......ddd..",
+  ".dooooooooooood.",
+  ".oooooooooooooo.",
+  ".oooooooooooooo.",
+  ".ooKKoooooKKooo.",
+  ".ooooooPPoooooo.",
+  ".oooooKooKooooo.",
+  "..oooooooooooo..",
+  "...oooooooooo..d",
+  "...oooooooooodd.",
+  "...oooooooooo...",
+  "...oooooooooo...",
+  "...dd......dd...",
+  "................"]]},
+
+{ name:'スライム', tip:'ぷにぷに はねる',
+  colors:{s:'#41c7f0', d:'#1f7fb0', K:'#10202a'},
+  frames:[[
+  "................",
+  "......ssss......",
+  ".....ssssss.....",
+  "....ssssssss....",
+  "...ssssssssss...",
+  "...ssssssssss...",
+  "..ssssssssssss..",
+  "..ssssssssssss..",
+  "..ssKKssssKKss..",
+  "..ssKKssssKKss..",
+  "..ssssssssssss..",
+  ".ssssssssssssss.",
+  ".ssssssssssssss.",
+  ".ssssssssssssss.",
+  ".dddddddddddddd.",
+  "................"],[
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  "....ssssssss....",
+  "..ssssssssssss..",
+  "..ssssssssssss..",
+  ".ssKKssssssKKss.",
+  ".ssKKssssssKKss.",
+  ".ssssssssssssss.",
+  "ssssssssssssssss",
+  "ssssssssssssssss",
+  ".dddddddddddddd.",
+  "................"]]},
+
+{ name:'ロボット', tip:'目がひかる／うでを上げる',
+  colors:{g:'#b8c0cc', d:'#5a6270', K:'#1a1e26', y:'#ffd24d', r:'#ff4d4d'},
+  frames:[[
+  ".......y........",
+  ".......d........",
+  "...gggggggggg...",
+  "..gggggggggggg..",
+  "..gKKKggggKKKg..",
+  "..gKKKggggKKKg..",
+  "..gggggggggggg..",
+  "..ggddddddddgg..",
+  "...gggggggggg...",
+  "....gggggggg....",
+  ".gggggggggggggg.",
+  ".g.gggggggggg.g.",
+  "...gggggggggg...",
+  "...gggggggggg...",
+  "...dd......dd...",
+  "................"],[
+  ".......y........",
+  ".......d........",
+  "...gggggggggg...",
+  "..gggggggggggg..",
+  "..grrrggggrrrg..",
+  "..grrrggggrrrg..",
+  "..gggggggggggg..",
+  "..ggddddddddgg..",
+  "...gggggggggg...",
+  ".g..gggggggg..g.",
+  ".g.gggggggggg.g.",
+  "...gggggggggg...",
+  "...gggggggggg...",
+  "...gggggggggg...",
+  "...dd......dd...",
+  "................"]]},
+
+{ name:'ことり', tip:'はばたく',
+  colors:{y:'#ffd83c', d:'#e09a00', o:'#ff8a1f', K:'#2a1a10'},
+  frames:[[
+  "................",
+  "................",
+  ".....yyyyyy.....",
+  "....yyyyyyyy....",
+  "...yyKyyyyKyy...",
+  "...yyyyyyyyyy...",
+  "...yyyyooyyyy...",
+  "...yyyyyyyyyy...",
+  ".ddyyyyyyyyyydd.",
+  ".ddyyyyyyyyyydd.",
+  "....yyyyyyyy....",
+  ".....oo..oo.....",
+  "................",
+  "................",
+  "................",
+  "................"],[
+  "................",
+  "................",
+  ".....yyyyyy.....",
+  "....yyyyyyyy....",
+  "...yyKyyyyKyy...",
+  ".ddyyyyyyyyyydd.",
+  ".ddyyyyooyyyydd.",
+  "...yyyyyyyyyy...",
+  "...yyyyyyyyyy...",
+  "...yyyyyyyyyy...",
+  "....yyyyyyyy....",
+  ".....oo..oo.....",
+  "................",
+  "................",
+  "................",
+  "................"]]},
+
+{ name:'おばけ', tip:'ふわふわ うかぶ',
+  colors:{w:'#f2f4f8', s:'#c3c8d6', K:'#1a1e26', P:'#ff9fb0'},
+  frames:[[
+  "................",
+  ".....wwwwww.....",
+  "...wwwwwwwwww...",
+  "..wwwwwwwwwwww..",
+  "..wwwwwwwwwwww..",
+  "..wwKKwwwwKKww..",
+  "..wwKKwwwwKKww..",
+  "..wwwwwwwwwwww..",
+  "..wwPwwwwwwPww..",
+  "..wwwwwwwwwwww..",
+  "..wwwwwwwwwwww..",
+  "..wwwwwwwwwwww..",
+  "..ssssssssssss..",
+  "..ss.ss..ss.ss..",
+  "................",
+  "................"],[
+  "................",
+  "................",
+  ".....wwwwww.....",
+  "...wwwwwwwwww...",
+  "..wwwwwwwwwwww..",
+  "..wwwwwwwwwwww..",
+  "..wwKKwwwwKKww..",
+  "..wwKKwwwwKKww..",
+  "..wwwwwwwwwwww..",
+  "..wwPwwwwwwPww..",
+  "..wwwwwwwwwwww..",
+  "..wwwwwwwwwwww..",
+  "..wwwwwwwwwwww..",
+  "..ssssssssssss..",
+  "..s.ss.ss.ss.s..",
+  "................"]]},
+
+{ name:'ＵＦＯ', tip:'ライトが ひかる',
+  colors:{c:'#7fe6ff', g:'#aab6c8', d:'#5a6b85', y:'#ffe14d', r:'#ff5c5c'},
+  frames:[[
+  "................",
+  "......cccc......",
+  ".....cccccc.....",
+  "....cccccccc....",
+  "...cccccccccc...",
+  "..gggggggggggg..",
+  ".gggggggggggggg.",
+  "gggggggggggggggg",
+  "dddddddddddddddd",
+  ".dyddddrddddydd.",
+  "..dddddddddddd..",
+  "....dddddddd....",
+  "................",
+  "................",
+  "................",
+  "................"],[
+  "................",
+  "................",
+  "......cccc......",
+  ".....cccccc.....",
+  "....cccccccc....",
+  "...cccccccccc...",
+  "..gggggggggggg..",
+  ".gggggggggggggg.",
+  "gggggggggggggggg",
+  "dddddddddddddddd",
+  ".drddddyddddrdd.",
+  "..dddddddddddd..",
+  "....dddddddd....",
+  "................",
+  "................",
+  "................"]]},
+];
+
+// サンプルの色を、既定パレットのいちばん近いスロットへ「実際の色として」書き込む。
+// これで見本どおりの色になり、パレットの他の色もそのまま残る。
+function assignSampleColors(s){
+  const used=new Set(), map={};
+  for(const ch of Object.keys(s.colors)){
+    const c=unhex(s.colors[ch]);
+    let best=0, bd=Infinity;
+    for(let i=0;i<S.palette.length;i++){
+      if(used.has(i)) continue;
+      const p=S.palette[i];
+      const d=(p[0]-c[0])**2+(p[1]-c[1])**2+(p[2]-c[2])**2;
+      if(d<bd){ bd=d; best=i; }
+    }
+    used.add(best); S.palette[best]=c; map[ch]=best;
+  }
+  return map;
+}
+function isEmptyDoc(){ return S.frames.every(f=>f.every(v=>v===TRANSPARENT)); }
+function loadSample(s){
+  if(!isEmptyDoc() && !confirm(`「${s.name}」をよみこみます。\nいまの絵とパレットは入れかわります。\n（⌘Z で元にもどせます）\n\nよろしいですか？`)) return;
+  pushUndo();
+  S.palette=defaultPalette();
+  const map=assignSampleColors(s);
+  const w=s.frames[0][0].length, h=s.frames[0].length;
+  S.w=w; S.h=h;
+  S.frames=s.frames.map(rows=>{
+    const f=newFrame(w,h);
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+      const ch=rows[y][x];
+      if(ch!=='.'&&ch!==' ') f[y*w+x]=map[ch];
+    }
+    return f;
+  });
+  S.cur=0; S.sel=map[Object.keys(s.colors)[0]];
+  buildPalette();
+  userZoomed=false; fitZoom(); layout(); renderAll();
+  closeSamples();
+}
+// サンプルの見本表示（実際の色をそのまま描く）
+function drawSample(canvas, s, fi){
+  const rows=s.frames[fi % s.frames.length];
+  const w=rows[0].length, h=rows.length;
+  canvas.width=w; canvas.height=h;
+  const g=canvas.getContext('2d');
+  g.clearRect(0,0,w,h);
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+    const ch=rows[y][x]; if(ch==='.'||ch===' ') continue;
+    g.fillStyle=s.colors[ch]; g.fillRect(x,y,1,1);
+  }
+}
+let sampleTimer=null;
+function openSamples(){
+  const list=$('#sampleList'); list.innerHTML='';
+  const items=SAMPLES.map(s=>{
+    const b=document.createElement('button'); b.className='samp'; b.type='button';
+    const c=document.createElement('canvas');
+    const nm=document.createElement('b'); nm.textContent=s.name;
+    const tp=document.createElement('small'); tp.textContent=s.tip;
+    b.append(c,nm,tp); b.onclick=()=>loadSample(s);
+    list.appendChild(b);
+    drawSample(c,s,0);
+    return {c,s};
+  });
+  let t=0;
+  clearInterval(sampleTimer);
+  sampleTimer=setInterval(()=>{ t++; items.forEach(it=>drawSample(it.c,it.s,t)); }, 380);
+  $('#smodal').classList.add('on');
+}
+function closeSamples(){ clearInterval(sampleTimer); sampleTimer=null; $('#smodal').classList.remove('on'); }
+$('#btnSamples').onclick=openSamples;
+$('#sCancel').onclick=closeSamples;
+$('#smodal').addEventListener('pointerdown',e=>{ if(e.target.id==='smodal') closeSamples(); });
+
 /* ================= 保存・読込 ================= */
 function serialize(){
   return JSON.stringify({
@@ -959,7 +1291,7 @@ updUndo();
 // 初回レイアウト確定後にフィット（file:// 直開き時に stage 実寸が遅れて確定するため）
 requestAnimationFrame(()=>{ fitZoom(); layout(); });
 // デバッグ／外部連携用フック
-window.DOT = { S, renderTo, frameToImageData, load, serialize, importImage, buildAPNG };
+window.DOT = { S, renderTo, frameToImageData, load, serialize, importImage, buildAPNG, SAMPLES };
 </script>
 </body>
 </html>
