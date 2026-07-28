@@ -160,7 +160,7 @@
       <button id="btnResize" title="キャンバスのピクセル数を変更">サイズ</button>
       <button class="primary2" id="btnSamples" title="お手本のキャラクターを読み込む">サンプル</button>
       <span style="width:1px;height:22px;background:var(--line)"></span>
-      <button id="btnLoadImg" title="PNG/JPEG などの画像を読み込んでドット絵にする">画像を読込</button>
+      <button id="btnLoadImg" title="PNG/JPEG などの画像を読み込んでドット絵にする（APNGは全コマ取り込み）">画像を読込</button>
       <button id="btnLoad" title="保存した .json プロジェクトを開く">開く</button>
       <button id="btnSave" title="プロジェクトを .json で保存 (⌘S)">保存</button>
       <span style="width:1px;height:22px;background:var(--line)"></span>
@@ -826,29 +826,39 @@ function nearestIndex(r,g,b,cache){
   }
   cache.set(key,best); return best;
 }
-function importImage(img){
+// 1コマ以上の画像ソース（Image / Canvas / ImageBitmap）を取り込む共通処理
+function importSources(sources, iw, ih){
   const MAX=512;
-  let iw=img.naturalWidth, ih=img.naturalHeight;
   const sc=Math.min(1, MAX/iw, MAX/ih);
   const w=Math.max(1,Math.round(iw*sc)), h=Math.max(1,Math.round(ih*sc));
+  const total=sources.length, n=Math.min(total, MAX_FRAMES);
   const msg=`画像 ${iw}×${ih}px を読み込みます。\n\n`
+    + (total>1 ? `・アニメーション ${total}コマを検出しました`
+                 + (total>MAX_FRAMES ? `（先頭${MAX_FRAMES}コマだけ取り込みます）` : '') + `\n` : '')
     + (sc<1 ? `・上限512pxのため ${w}×${h}px に縮小します\n` : '')
     + `・キャンバスを ${w}×${h}px に変更します\n`
-    + `・現在のコマ（${S.cur+1}コマ目）に取り込みます\n\n続けますか？`;
+    + (n>1 ? `・コマ1〜${n}に取り込みます（いまの絵は置きかわります）\n`
+           : `・現在のコマ（${S.cur+1}コマ目）に取り込みます\n`)
+    + `\n続けますか？`;
   if(!confirm(msg)) return;
   const makePalette = confirm('画像に合わせて256色パレットを自動生成しますか？\n\nOK ＝ 自動生成（現在のパレットは置き換わります）\nキャンセル ＝ 現在のパレットのまま減色');
 
-  const c=document.createElement('canvas'); c.width=w; c.height=h;
-  const g=c.getContext('2d');
-  g.imageSmoothingEnabled = sc<1;       // 縮小時のみ補間、等倍ならドットを保つ
-  g.drawImage(img,0,0,w,h);
-  const src=g.getImageData(0,0,w,h).data;
+  const datas=[];
+  for(let i=0;i<n;i++){
+    const c=document.createElement('canvas'); c.width=w; c.height=h;
+    const g=c.getContext('2d');
+    g.imageSmoothingEnabled = sc<1;       // 縮小時のみ補間、等倍ならドットを保つ
+    g.drawImage(sources[i],0,0,w,h);
+    datas.push(g.getImageData(0,0,w,h).data);
+  }
 
   pushUndo();
   if(makePalette){
     const samples=[];
-    const stride=Math.max(1, Math.floor((w*h)/60000));
-    for(let i=0;i<w*h;i+=stride){
+    const stride=Math.max(1, Math.floor((w*h*n)/60000));
+    let k=0;
+    for(const src of datas) for(let i=0;i<w*h;i++){
+      if((k++ % stride)!==0) continue;      // 全コマからまんべんなく標本を取る
       if(src[i*4+3]<128) continue;
       samples.push([src[i*4],src[i*4+1],src[i*4+2]]);
     }
@@ -859,25 +869,124 @@ function importImage(img){
       buildPalette();
     }
   }
-  // キャンバスサイズを画像に合わせる（他のコマは左上基準で維持）
+
   const ow=S.w, oh=S.h, old=S.frames;
   S.w=w; S.h=h;
-  S.frames=old.map(f=>{
-    const n=newFrame(w,h);
-    for(let y=0;y<Math.min(h,oh);y++) for(let x=0;x<Math.min(w,ow);x++) n[y*w+x]=f[y*ow+x];
-    return n;
-  });
-  const dst=S.frames[S.cur], cache=new Map();
-  for(let i=0;i<w*h;i++){
-    dst[i] = src[i*4+3]<128 ? TRANSPARENT
+  const cache=new Map();
+  const quantize=src=>{
+    const f=newFrame(w,h);
+    for(let i=0;i<w*h;i++)
+      f[i] = src[i*4+3]<128 ? TRANSPARENT
            : nearestIndex(src[i*4],src[i*4+1],src[i*4+2],cache);
+    return f;
+  };
+  if(n>1){                                   // アニメーション：全コマを置きかえる
+    S.frames=datas.map(quantize);
+    S.cur=0;
+  }else{                                     // 静止画：キャンバスを合わせて現在のコマだけ差し替え
+    S.frames=old.map(f=>{
+      const nf=newFrame(w,h);
+      for(let y=0;y<Math.min(h,oh);y++) for(let x=0;x<Math.min(w,ow);x++) nf[y*w+x]=f[y*ow+x];
+      return nf;
+    });
+    S.frames[S.cur]=quantize(datas[0]);
   }
   userZoomed=false; fitZoom(); layout(); renderAll();
 }
+function importImage(img){ importSources([img], img.naturalWidth, img.naturalHeight); }
+
+/* ---- APNG（アニメーションPNG）を全コマに分解する ----
+   各コマを「独立した1枚のPNG」に組み直してブラウザにデコードさせ、
+   fcTL の配置・合成指定どおりに重ねて1コマ分の絵を作る。            */
+function loadBlobImage(blob){
+  if(typeof createImageBitmap==='function') return createImageBitmap(blob);
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(blob), im=new Image();
+    im.onload=()=>{ URL.revokeObjectURL(url); res(im); };
+    im.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error('frame decode failed')); };
+    im.src=url;
+  });
+}
+async function decodeAPNG(buf){
+  const d=new Uint8Array(buf), dv=new DataView(buf);
+  const SIG=[137,80,78,71,13,10,26,10];
+  if(d.length<8) return null;
+  for(let i=0;i<8;i++) if(d[i]!==SIG[i]) return null;
+
+  let p=8, ihdr=null, acTL=null, cur=null, firstIdat=false, idatToFrame0=false;
+  const pre=[], frames=[];
+  while(p+8<=d.length){
+    const len=dv.getUint32(p);
+    const type=String.fromCharCode(d[p+4],d[p+5],d[p+6],d[p+7]);
+    if(p+12+len>d.length) break;
+    const body=d.subarray(p+8, p+8+len);
+    if(type==='IHDR') ihdr=body.slice();
+    else if(type==='acTL') acTL={frames:dv.getUint32(p+8), plays:dv.getUint32(p+12)};
+    else if(type==='fcTL'){
+      const b=new DataView(buf, p+8, len);
+      cur={ w:b.getUint32(4), h:b.getUint32(8), x:b.getUint32(12), y:b.getUint32(16),
+            dispose:b.getUint8(24), blend:b.getUint8(25), parts:[] };
+      frames.push(cur);
+    }
+    else if(type==='IDAT'){
+      if(!firstIdat){ firstIdat=true; idatToFrame0=frames.length>0; }
+      if(idatToFrame0) frames[0].parts.push(body.slice());
+    }
+    else if(type==='fdAT'){ if(cur) cur.parts.push(body.slice(4)); }
+    else if(type==='IEND') break;
+    else pre.push({type, body:body.slice()});   // PLTE / tRNS など、デコードに要る付随情報
+    p += 12+len;
+  }
+  if(!acTL || !ihdr) return null;
+  const live=frames.filter(f=>f.parts.length);
+  if(!live.length) return null;
+
+  const W=new DataView(ihdr.buffer).getUint32(0), H=new DataView(ihdr.buffer).getUint32(4);
+  const out=document.createElement('canvas'); out.width=W; out.height=H;
+  const og=out.getContext('2d');
+  const keep=document.createElement('canvas'); keep.width=W; keep.height=H;
+  const kg=keep.getContext('2d');
+  const result=[];
+  let prevDispose=null;
+
+  for(const fc of live){
+    if(prevDispose){                                   // 直前コマの後始末
+      if(prevDispose.op===1) og.clearRect(prevDispose.x,prevDispose.y,prevDispose.w,prevDispose.h);
+      else if(prevDispose.op===2){ og.clearRect(0,0,W,H); og.drawImage(keep,0,0); }
+    }
+    if(fc.dispose===2){ kg.clearRect(0,0,W,H); kg.drawImage(out,0,0); }   // 描画前を退避
+
+    // このコマを単体PNGに組み直す
+    const ih=ihdr.slice(); const ihv=new DataView(ih.buffer);
+    ihv.setUint32(0, fc.w); ihv.setUint32(4, fc.h);
+    const parts=[new Uint8Array(SIG), pngChunk('IHDR', ih)];
+    for(const c of pre) parts.push(pngChunk(c.type, c.body));
+    let total=0; for(const q of fc.parts) total+=q.length;
+    const dat=new Uint8Array(total); let o=0;
+    for(const q of fc.parts){ dat.set(q,o); o+=q.length; }
+    parts.push(pngChunk('IDAT', dat), pngChunk('IEND', new Uint8Array(0)));
+
+    const bmp=await loadBlobImage(new Blob(parts,{type:'image/png'}));
+    if(fc.blend===0) og.clearRect(fc.x, fc.y, fc.w, fc.h);   // SOURCE = 置きかえ
+    og.drawImage(bmp, fc.x, fc.y);
+    if(bmp.close) bmp.close();
+
+    const snap=document.createElement('canvas'); snap.width=W; snap.height=H;
+    snap.getContext('2d').drawImage(out,0,0);
+    result.push(snap);
+    prevDispose={op:fc.dispose, x:fc.x, y:fc.y, w:fc.w, h:fc.h};
+  }
+  return {frames:result, w:W, h:H};
+}
+
 $('#btnLoadImg').onclick=()=>$('#imgIn').click();
-$('#imgIn').onchange=e=>{
+$('#imgIn').onchange=async e=>{
   const file=e.target.files[0]; e.target.value='';
   if(!file) return;
+  try{                                        // まず APNG として読めるか試す
+    const apng=await decodeAPNG(await file.arrayBuffer());
+    if(apng && apng.frames.length>1){ importSources(apng.frames, apng.w, apng.h); return; }
+  }catch(err){ /* APNG でなければ通常の画像として扱う */ }
   const url=URL.createObjectURL(file);
   const img=new Image();
   img.onload=()=>{ try{ importImage(img); } finally { URL.revokeObjectURL(url); } };
@@ -1868,7 +1977,8 @@ updUndo();
 // 初回レイアウト確定後にフィット（file:// 直開き時に stage 実寸が遅れて確定するため）
 requestAnimationFrame(()=>{ fitZoom(); layout(); });
 // デバッグ／外部連携用フック
-window.DOT = { S, renderTo, frameToImageData, load, serialize, importImage, buildAPNG, SAMPLES };
+window.DOT = { S, renderTo, frameToImageData, load, serialize, importImage, importSources,
+               buildAPNG, decodeAPNG, SAMPLES };
 </script>
 </body>
 </html>
