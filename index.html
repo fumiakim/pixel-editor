@@ -53,8 +53,8 @@
       linear-gradient(-45deg,var(--chk2) 25%,transparent 25%),
       linear-gradient(45deg,transparent 75%,var(--chk2) 75%),
       linear-gradient(-45deg,transparent 75%,var(--chk2) 75%);
-    background-size:16px 16px;
-    background-position:0 0,0 8px,8px -8px,-8px 0;
+    background-size:32px 32px;
+    background-position:0 0,0 16px,16px -16px,-16px 0;
   }
   #cv,#ov{display:block; position:absolute; left:0; top:0}
   #cv{position:relative; image-rendering:pixelated}
@@ -99,12 +99,12 @@
   .fr canvas{display:block; width:48px; height:48px; image-rendering:pixelated;
     background-color:var(--chk1);
     background-image:linear-gradient(45deg,var(--chk2) 25%,transparent 25%),linear-gradient(-45deg,var(--chk2) 25%,transparent 25%),linear-gradient(45deg,transparent 75%,var(--chk2) 75%),linear-gradient(-45deg,transparent 75%,var(--chk2) 75%);
-    background-size:10px 10px; background-position:0 0,0 5px,5px -5px,-5px 0;}
+    background-size:20px 20px; background-position:0 0,0 10px,10px -10px,-10px 0;}
   .fr b{position:absolute; left:2px; top:2px; font-size:9px; background:rgba(0,0,0,.6); padding:0 3px; border-radius:3px; color:#fff}
 
   #preview{background-color:var(--chk1); image-rendering:pixelated; border-radius:6px; display:block; margin:0 auto;
     background-image:linear-gradient(45deg,var(--chk2) 25%,transparent 25%),linear-gradient(-45deg,var(--chk2) 25%,transparent 25%),linear-gradient(45deg,transparent 75%,var(--chk2) 75%),linear-gradient(-45deg,transparent 75%,var(--chk2) 75%);
-    background-size:12px 12px; background-position:0 0,0 6px,6px -6px,-6px 0;}
+    background-size:24px 24px; background-position:0 0,0 12px,12px -12px,-12px 0;}
 
   #pos{color:var(--dim); font-variant-numeric:tabular-nums; margin-left:auto; padding-right:4px}
   .hint{color:var(--dim); font-size:10.5px; line-height:1.6}
@@ -129,7 +129,7 @@
   .samp canvas{width:76px; height:76px; image-rendering:pixelated; border-radius:6px;
     background-color:var(--chk1);
     background-image:linear-gradient(45deg,var(--chk2) 25%,transparent 25%),linear-gradient(-45deg,var(--chk2) 25%,transparent 25%),linear-gradient(45deg,transparent 75%,var(--chk2) 75%),linear-gradient(-45deg,transparent 75%,var(--chk2) 75%);
-    background-size:12px 12px; background-position:0 0,0 6px,6px -6px,-6px 0;}
+    background-size:24px 24px; background-position:0 0,0 12px,12px -12px,-12px 0;}
   .samp b{display:block; margin-top:6px; font-size:12px; font-weight:600}
   .samp small{display:block; color:var(--dim); font-size:10px}
 </style>
@@ -283,9 +283,9 @@
 <div id="modal">
   <div class="card">
     <h2 id="mdTitle">キャンバスサイズ</h2>
-    <div class="row"><label style="width:40px">横</label><input type="number" id="mdW" min="1" max="512" value="32"> px</div>
-    <div class="row"><label style="width:40px">縦</label><input type="number" id="mdH" min="1" max="512" value="32"> px</div>
-    <div class="row" style="margin-top:6px"><span class="hint">1〜512px。既存の絵は左上を基準に維持されます。</span></div>
+    <div class="row"><label style="width:40px">横</label><input type="number" id="mdW" min="1" max="4096" value="32"> px</div>
+    <div class="row"><label style="width:40px">縦</label><input type="number" id="mdH" min="1" max="4096" value="32"> px</div>
+    <div class="row" style="margin-top:6px"><span class="hint">1〜4096px。既存の絵は左上を基準に維持されます。<br>大きくすると動作が重くなります（1024×1024程度が目安）。</span></div>
     <div class="row" style="margin-top:14px; justify-content:flex-end">
       <button id="mdCancel">キャンセル</button>
       <button class="primary" id="mdOk">OK</button>
@@ -298,6 +298,8 @@
 const $ = s => document.querySelector(s);
 const TRANSPARENT = -1;
 const MAX_FRAMES = 4;
+const SIZE_MAX = 4096;        // キャンバス1辺の上限
+const HEAVY_PX = 1048576;     // これを超えると動作が重くなるため確認を出す（1024×1024相当）
 
 /* ================= 状態 ================= */
 const S = {
@@ -476,7 +478,10 @@ function snapshot(){
   return { w:S.w, h:S.h, cur:S.cur, frames:S.frames.map(f=>Int16Array.from(f)),
            palette:S.palette.map(c=>c.slice()) };
 }
-function pushUndo(){ undoStack.push(snapshot()); if(undoStack.length>60) undoStack.shift(); redoStack=[]; updUndo(); }
+// キャンバスが大きいほど1件あたりのメモリが増えるので、保持数を自動で減らす
+function undoLimit(){ return Math.max(5, Math.min(60, Math.floor(3000000/Math.max(1, S.w*S.h)))); }
+function pushUndo(){ undoStack.push(snapshot());
+  while(undoStack.length>undoLimit()) undoStack.shift(); redoStack=[]; updUndo(); }
 function applySnap(s){
   S.w=s.w; S.h=s.h; S.frames=s.frames.map(f=>Int16Array.from(f));
   S.cur=Math.min(s.cur,S.frames.length-1);
@@ -828,14 +833,22 @@ function nearestIndex(r,g,b,cache){
 }
 // 1コマ以上の画像ソース（Image / Canvas / ImageBitmap）を取り込む共通処理
 function importSources(sources, iw, ih){
-  const MAX=512;
-  const sc=Math.min(1, MAX/iw, MAX/ih);
-  const w=Math.max(1,Math.round(iw*sc)), h=Math.max(1,Math.round(ih*sc));
   const total=sources.length, n=Math.min(total, MAX_FRAMES);
+  // 原寸（元画像のピクセル数）で取り込む。大きすぎる場合だけ確認して縮小の選択肢を出す。
+  let w=iw, h=ih, sc=1;
+  if(iw*ih > HEAVY_PX){
+    const fit=Math.sqrt(HEAVY_PX/(iw*ih));
+    const fw=Math.max(1,Math.round(iw*fit)), fh=Math.max(1,Math.round(ih*fit));
+    if(!confirm(`画像が ${iw}×${ih}px と大きいため、原寸のままだと動作が重くなることがあります。\n\n`
+      + `OK ＝ 原寸 ${iw}×${ih}px のまま読み込む\n`
+      + `キャンセル ＝ ${fw}×${fh}px に縮小して読み込む`)){
+      w=fw; h=fh; sc=fit;
+    }
+  }
   const msg=`画像 ${iw}×${ih}px を読み込みます。\n\n`
     + (total>1 ? `・アニメーション ${total}コマを検出しました`
                  + (total>MAX_FRAMES ? `（先頭${MAX_FRAMES}コマだけ取り込みます）` : '') + `\n` : '')
-    + (sc<1 ? `・上限512pxのため ${w}×${h}px に縮小します\n` : '')
+    + (sc<1 ? `・${w}×${h}px に縮小して読み込みます\n` : `・原寸のまま取り込みます\n`)
     + `・キャンバスを ${w}×${h}px に変更します\n`
     + (n>1 ? `・コマ1〜${n}に取り込みます（いまの絵は置きかわります）\n`
            : `・現在のコマ（${S.cur+1}コマ目）に取り込みます\n`)
@@ -1928,8 +1941,9 @@ $('#btnNew').onclick=()=>openModal('new');
 $('#mdCancel').onclick=()=>$('#modal').classList.remove('on');
 $('#modal').addEventListener('pointerdown',e=>{ if(e.target.id==='modal') $('#modal').classList.remove('on'); });
 $('#mdOk').onclick=()=>{
-  const w=Math.max(1,Math.min(512, Math.round(+$('#mdW').value)||1));
-  const h=Math.max(1,Math.min(512, Math.round(+$('#mdH').value)||1));
+  const w=Math.max(1,Math.min(SIZE_MAX, Math.round(+$('#mdW').value)||1));
+  const h=Math.max(1,Math.min(SIZE_MAX, Math.round(+$('#mdH').value)||1));
+  if(w*h>HEAVY_PX && !confirm(`${w}×${h}px は大きいため、動作が重くなることがあります。\n続けますか？`)) return;
   $('#modal').classList.remove('on');
   if(modalMode==='new'){
     if(!confirm('現在の絵を破棄して新規作成します。よろしいですか？')) return;
