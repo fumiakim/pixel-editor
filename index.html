@@ -1970,8 +1970,10 @@ async function renderWorks(){
   let s;
   try{ s=await API.session(); }
   catch{
-    worksHTML(`<div class="notice hint">「みんなの作品」はインターネット上に公開した版でだけ使えます。<br>
-      いま開いているのはファイル単体（またはGitHub Pages版）なので、サーバーがありません。</div>`);
+    worksHTML(`<div class="notice hint">「みんなの作品」は公開版でだけ使えます。<br>
+      いま開いているのはファイル単体（またはGitHub Pages版）なので、保存先のサーバーがありません。<br><br>
+      → <a href="https://pixel-editor-peach.vercel.app/" target="_blank" rel="noopener"
+           style="color:var(--accent)">pixel-editor-peach.vercel.app</a> をひらいてください。</div>`);
     return;
   }
   workState.authed=!!s.authed; workState.storage=!!s.storage;

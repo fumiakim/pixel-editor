@@ -90,19 +90,31 @@ function ensureStore() {
   throw e;
 }
 
+// SDK の戻り値の形は環境で差があるため、取り出せる経路を順に試す。
+async function readBlobText(b) {
+  const r = await get(b.pathname, { access: 'private', useCache: false });
+  if (!r) throw new Error('get() が null を返しました');
+  if (r.blob && typeof r.blob.text === 'function') return await r.blob.text();
+  if (r.stream) return await new Response(r.stream).text();
+  if (r.body) return await new Response(r.body).text();
+  const res = await fetch(b.url, {
+    headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+  });
+  if (!res.ok) throw new Error(`直接取得も失敗 HTTP ${res.status}`);
+  return await res.text();
+}
+
 async function listWorks(limit) {
   ensureStore();
   const { blobs } = await list({ prefix: PREFIX, limit: 1000 });
   blobs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));   // 新しい順
   const take = blobs.slice(0, limit);
+  const errors = [];
   const items = await Promise.all(take.map(async b => {
-    try {
-      const r = await get(b.pathname, { access: 'private', useCache: false });
-      if (!r || !r.blob) return null;
-      return JSON.parse(await r.blob.text());
-    } catch { return null; }
+    try { return JSON.parse(await readBlobText(b)); }
+    catch (e) { errors.push(`${b.pathname}: ${e.message}`); return null; }
   }));
-  return { items: items.filter(Boolean), blobs };
+  return { items: items.filter(Boolean), blobs, errors };
 }
 async function saveWork(item) {
   ensureStore();

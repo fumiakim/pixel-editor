@@ -18,7 +18,11 @@ module.exports = async (req, res) => {
   try {
     /* ---------------- 一覧 ---------------- */
     if (req.method === 'GET') {
-      const { items } = await listWorks(MAX_ITEMS);
+      const { items, blobs, errors } = await listWorks(MAX_ITEMS);
+      // ?debug=1 は原因調査用（ログイン済みの人だけが見られる）
+      if (req.query && req.query.debug) {
+        return res.status(200).json({ items: items.length, found: blobs.length, errors });
+      }
       return res.status(200).json({ items });
     }
 
