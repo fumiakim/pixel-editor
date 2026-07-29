@@ -1,0 +1,17 @@
+{
+  "name": "pixel-editor",
+  "version": "1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fumiakim/pixel-editor.git"
+  },
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/fumiakim/pixel-editor/issues"
+  },
+  "homepage": "https://github.com/fumiakim/pixel-editor#readme",
+  "dependencies": {
+    "@vercel/blob": "^2.6.1"
+  },
+  "private": true
+}

@@ -1,11 +1,13 @@
 // ギャラリーAPI 共通処理。
-//   ・パスワード認証（署名付きCookie）
-//   ・Upstash Redis(REST) への読み書き
+//   ・合言葉によるログイン（署名付き HttpOnly Cookie）
+//   ・Vercel Blob（private ストア）への読み書き
 // ファイル名が _ 始まりなので Vercel のルーティング対象にはならない。
 const crypto = require('node:crypto');
+const { put, list, del, get } = require('@vercel/blob');
 
 const COOKIE = 'dot-auth';
 const SESSION_DAYS = 30;
+const PREFIX = 'works/';
 
 /* ---------------- 署名付きセッション ---------------- */
 function secret() {
@@ -57,51 +59,66 @@ function requireAuth(req, res) {
   return false;
 }
 
-/* ---------------- Upstash Redis (REST) ---------------- */
-const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-const kvReady = !!(KV_URL && KV_TOKEN);
+/* ---------------- 総当たり対策 ----------------
+   実行インスタンス内のメモリで数える簡易版。インスタンスが入れ替わると
+   リセットされるので万全ではないが、失敗のたびに待たせることで
+   短時間に大量に試す行為を実質的に止める。                        */
+const fails = new Map();
+const clientIp = req => (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function redis(...cmd) {
-  if (!kvReady) {
-    const e = new Error('保存先が未設定です。Vercel に KV_REST_API_URL / KV_REST_API_TOKEN を設定してください。');
-    e.setup = true;
-    throw e;
-  }
-  const r = await fetch(KV_URL, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(cmd.map(v => String(v))),
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || j.error) throw new Error(j.error || `KV error ${r.status}`);
-  return j.result;
-}
-
-/* ---------------- 総当たり対策（IPごとの失敗回数） ---------------- */
-const clientIp = req =>
-  (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
-
-async function tooManyFailures(req) {
-  if (!kvReady) return false;                      // 保存先が無いときは素通り
-  try { return Number(await redis('GET', `dot:fail:${clientIp(req)}`)) >= 10; }
-  catch { return false; }
+function tooManyFailures(req) {
+  const f = fails.get(clientIp(req));
+  return !!(f && f.n >= 10 && Date.now() < f.until);
 }
 async function noteFailure(req) {
-  if (!kvReady) return;
-  try {
-    const key = `dot:fail:${clientIp(req)}`;
-    await redis('INCR', key);
-    await redis('EXPIRE', key, 600);               // 10分で解除
-  } catch { /* 記録できなくてもログイン処理は続ける */ }
+  const ip = clientIp(req);
+  const f = fails.get(ip) || { n: 0, until: 0 };
+  f.n += 1; f.until = Date.now() + 10 * 60 * 1000;
+  fails.set(ip, f);
+  if (fails.size > 500) fails.clear();          // 際限なく増えないように
+  await sleep(700);                             // 失敗するたびに待たせる
 }
-async function clearFailures(req) {
-  if (!kvReady) return;
-  try { await redis('DEL', `dot:fail:${clientIp(req)}`); } catch { /* noop */ }
+const clearFailures = req => { fails.delete(clientIp(req)); };
+
+/* ---------------- 保存先（Vercel Blob） ---------------- */
+const storeReady = !!process.env.BLOB_READ_WRITE_TOKEN;
+function ensureStore() {
+  if (storeReady) return;
+  const e = new Error('保存先が未設定です。Vercel のプロジェクトに Blob ストアを接続してください。');
+  e.setup = true;
+  throw e;
+}
+
+async function listWorks(limit) {
+  ensureStore();
+  const { blobs } = await list({ prefix: PREFIX, limit: 1000 });
+  blobs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));   // 新しい順
+  const take = blobs.slice(0, limit);
+  const items = await Promise.all(take.map(async b => {
+    try {
+      const r = await get(b.pathname, { access: 'private', useCache: false });
+      if (!r || !r.blob) return null;
+      return JSON.parse(await r.blob.text());
+    } catch { return null; }
+  }));
+  return { items: items.filter(Boolean), blobs };
+}
+async function saveWork(item) {
+  ensureStore();
+  await put(`${PREFIX}${item.id}.json`, JSON.stringify(item), {
+    access: 'private', contentType: 'application/json',
+    addRandomSuffix: false, allowOverwrite: true,
+  });
+}
+async function deleteWorks(urls) {
+  ensureStore();
+  if (urls.length) await del(urls);
 }
 
 module.exports = {
   COOKIE, sign, verify, sessionCookie, clearCookie, readCookie,
-  isAuthed, requireAuth, redis, kvReady,
+  isAuthed, requireAuth,
   tooManyFailures, noteFailure, clearFailures,
+  storeReady, listWorks, saveWork, deleteWorks, PREFIX,
 };

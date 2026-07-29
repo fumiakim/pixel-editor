@@ -1,9 +1,9 @@
 // GET    /api/gallery      … 投稿一覧（新しい順）
-// POST   /api/gallery      … 投稿（本文は圧縮済みのプロジェクトデータ）
+// POST   /api/gallery      … 投稿
 // DELETE /api/gallery?id=… … 削除
 // いずれもログイン必須。
 const crypto = require('node:crypto');
-const { requireAuth, redis } = require('./_lib.js');
+const { requireAuth, listWorks, saveWork, deleteWorks, PREFIX } = require('./_lib.js');
 
 const MAX_ITEMS = 60;          // ギャラリーに残す件数（古いものから消える）
 const MAX_DATA = 40000;        // 1件あたりの圧縮データ長（base64・約30KB）
@@ -18,12 +18,7 @@ module.exports = async (req, res) => {
   try {
     /* ---------------- 一覧 ---------------- */
     if (req.method === 'GET') {
-      const ids = (await redis('ZRANGE', 'dot:gallery', 0, MAX_ITEMS - 1, 'REV')) || [];
-      if (!ids.length) return res.status(200).json({ items: [] });
-      const raw = await redis('MGET', ...ids.map(id => `dot:work:${id}`));
-      const items = (raw || [])
-        .map(s => { try { return JSON.parse(s); } catch { return null; } })
-        .filter(Boolean);
+      const { items } = await listWorks(MAX_ITEMS);
       return res.status(200).json({ items });
     }
 
@@ -51,24 +46,24 @@ module.exports = async (req, res) => {
         createdAt: Date.now(),
         data,
       };
-      await redis('SET', `dot:work:${item.id}`, JSON.stringify(item));
-      await redis('ZADD', 'dot:gallery', item.createdAt, item.id);
+      await saveWork(item);
 
       // 上限を超えた古い投稿を掃除
-      const over = (await redis('ZRANGE', 'dot:gallery', 0, -MAX_ITEMS - 1)) || [];
-      for (const id of over) {
-        await redis('DEL', `dot:work:${id}`);
-        await redis('ZREM', 'dot:gallery', id);
-      }
-      return res.status(200).json({ ok: true, item });
+      const { blobs } = await listWorks(0);
+      const over = blobs.slice(MAX_ITEMS).map(x => x.url);
+      if (over.length) await deleteWorks(over);
+
+      return res.status(200).json({ ok: true, item: { ...item, data: undefined } });
     }
 
     /* ---------------- 削除 ---------------- */
     if (req.method === 'DELETE') {
       const id = String((req.query && req.query.id) || '');
-      if (!id) return res.status(400).json({ error: 'missing_id' });
-      await redis('DEL', `dot:work:${id}`);
-      await redis('ZREM', 'dot:gallery', id);
+      if (!/^[a-f0-9-]{10,64}$/i.test(id)) return res.status(400).json({ error: 'bad_id' });
+      const { blobs } = await listWorks(0);
+      const hit = blobs.filter(x => x.pathname === `${PREFIX}${id}.json`).map(x => x.url);
+      if (!hit.length) return res.status(404).json({ error: 'not_found', message: '見つかりませんでした。' });
+      await deleteWorks(hit);
       return res.status(200).json({ ok: true });
     }
 
