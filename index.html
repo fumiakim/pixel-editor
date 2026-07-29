@@ -121,10 +121,19 @@
   #smodal.on{display:flex}
   #smodal .card{background:var(--panel); border:1px solid var(--line); border-radius:14px;
     padding:18px; width:min(560px,92vw); max-height:88vh; overflow:auto}
-  #smodal h2{margin:0 0 4px; font-size:15px}
-  #sampleList{display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:10px; margin-top:12px}
-  .samp{background:var(--panel2); border:2px solid var(--line); border-radius:10px; padding:8px 4px;
-    text-align:center; cursor:pointer; color:var(--fg); font:inherit}
+  #smodal h2{margin:0 0 10px; font-size:15px}
+  .gtabs{display:flex; gap:6px; border-bottom:1px solid var(--line); margin-bottom:10px}
+  .gtab{background:none; border:none; border-bottom:2px solid transparent; border-radius:0;
+    padding:7px 12px; color:var(--dim); font-weight:600; font-size:13px; cursor:pointer}
+  .gtab:hover{background:none; color:var(--fg)}
+  .gtab.on{color:var(--fg); border-bottom-color:var(--accent2)}
+  #sampleList,#workList{display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:10px; margin-top:12px}
+  .wmeta{display:block; font-size:10px; color:var(--dim); margin-top:2px}
+  .wdel{position:absolute; top:2px; right:2px; padding:1px 6px; font-size:11px; line-height:1.4;
+    background:rgba(0,0,0,.55); border:1px solid var(--line); border-radius:6px; color:#ffb4b4; cursor:pointer}
+  .notice{background:#252831; border:1px solid var(--line); border-radius:10px; padding:12px; margin-top:10px}
+  .samp{position:relative; background:var(--panel2); border:2px solid var(--line); border-radius:10px;
+    padding:8px 4px; text-align:center; cursor:pointer; color:var(--fg); font:inherit}
   .samp:hover{border-color:var(--accent); background:#3a4050}
   .samp canvas{width:76px; height:76px; image-rendering:pixelated; border-radius:6px;
     background-color:var(--chk1);
@@ -158,7 +167,7 @@
     <div id="topbar">
       <button id="btnNew" title="新しいキャンバスを作る">新規</button>
       <button id="btnResize" title="キャンバスのピクセル数を変更">サイズ</button>
-      <button class="primary2" id="btnSamples" title="お手本のキャラクターを読み込む">サンプル</button>
+      <button class="primary2" id="btnSamples" title="お手本のキャラクターと、みんなの作品">ギャラリー</button>
       <span style="width:1px;height:22px;background:var(--line)"></span>
       <button id="btnLoadImg" title="PNG/JPEG などの画像を読み込んでドット絵にする（APNGは全コマ取り込み）">画像を読込</button>
       <button id="btnLoad" title="保存した .json プロジェクトを開く">開く</button>
@@ -264,15 +273,27 @@
   </div>
 </div>
 
-<!-- サンプルギャラリー -->
+<!-- ギャラリー -->
 <div id="smodal">
   <div class="card">
-    <h2>サンプル ― クリックでよみこみ</h2>
-    <div class="hint">
-      すきなキャラクターをえらんでね。よみこむと、いまの絵とパレットは入れかわります（<kbd>⌘Z</kbd>で元にもどせます）。<br>
-      どれも 16×16 ドット・2コマのアニメーションです。▶ 再生ボタンで動かしてみよう。
+    <h2>ギャラリー</h2>
+    <div class="gtabs">
+      <button class="gtab on" data-tab="samples">サンプル</button>
+      <button class="gtab" data-tab="works">みんなの作品</button>
     </div>
-    <div id="sampleList"></div>
+
+    <div id="tabSamples">
+      <div class="hint">
+        すきなキャラクターをえらんでね。よみこむと、いまの絵とパレットは入れかわります（<kbd>⌘Z</kbd>で元にもどせます）。<br>
+        どれも 16×16 ドット・2コマのアニメーションです。▶ 再生ボタンで動かしてみよう。
+      </div>
+      <div id="sampleList"></div>
+    </div>
+
+    <div id="tabWorks" hidden>
+      <div id="worksBody"></div>
+    </div>
+
     <div class="row" style="margin-top:14px; justify-content:flex-end">
       <button id="sCancel">とじる</button>
     </div>
@@ -1856,6 +1877,10 @@ function drawSample(canvas, s, fi){
 }
 let sampleTimer=null;
 function openSamples(){
+  // 開くたび「サンプル」タブに戻す
+  document.querySelectorAll('.gtab').forEach((x,i)=>x.classList.toggle('on', i===0));
+  $('#tabSamples').hidden=false; $('#tabWorks').hidden=true;
+  clearInterval(workTimer); workTimer=null;
   const list=$('#sampleList'); list.innerHTML='';
   const items=SAMPLES.map(s=>{
     const b=document.createElement('button'); b.className='samp'; b.type='button';
@@ -1872,10 +1897,183 @@ function openSamples(){
   sampleTimer=setInterval(()=>{ t++; items.forEach(it=>drawSample(it.c,it.s,t)); }, 380);
   $('#smodal').classList.add('on');
 }
-function closeSamples(){ clearInterval(sampleTimer); sampleTimer=null; $('#smodal').classList.remove('on'); }
+function closeSamples(){
+  clearInterval(sampleTimer); sampleTimer=null;
+  clearInterval(workTimer); workTimer=null;
+  $('#smodal').classList.remove('on');
+}
 $('#btnSamples').onclick=openSamples;
 $('#sCancel').onclick=closeSamples;
 $('#smodal').addEventListener('pointerdown',e=>{ if(e.target.id==='smodal') closeSamples(); });
+
+/* ================= ギャラリー「みんなの作品」 =================
+   保存先はサーバー（Vercel）。合言葉でログインした人だけが見られる／投稿できる。
+   ファイルを直接開いた場合や GitHub Pages 版では API が無いので、その旨を表示する。 */
+const API={
+  async session(){ const r=await fetch('/api/login',{cache:'no-store'}); return r.json(); },
+  async login(password){
+    const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({password})});
+    const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.message||'ログインできませんでした。');
+    return j;
+  },
+  async logout(){ await fetch('/api/login',{method:'DELETE'}); },
+  async list(){
+    const r=await fetch('/api/gallery',{cache:'no-store'});
+    const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.message||'よみこめませんでした。');
+    return j.items||[];
+  },
+  async post(rec){
+    const r=await fetch('/api/gallery',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(rec)});
+    const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.message||'とうこうできませんでした。');
+    return j;
+  },
+  async remove(id){
+    const r=await fetch('/api/gallery?id='+encodeURIComponent(id),{method:'DELETE'});
+    if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.message||'けせませんでした。'); }
+  },
+};
+// プロジェクトJSON ⇔ base64(gzip) 。ドット絵はよく縮むので数KBに収まる。
+const b64=bytes=>{ let s=''; for(let i=0;i<bytes.length;i+=8192)
+  s+=String.fromCharCode.apply(null, bytes.subarray(i,i+8192)); return btoa(s); };
+const unb64=str=>{ const bin=atob(str), a=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return a; };
+async function packDoc(json){
+  const s=new Blob([new TextEncoder().encode(json)]).stream().pipeThrough(new CompressionStream('gzip'));
+  return b64(new Uint8Array(await new Response(s).arrayBuffer()));
+}
+async function unpackDoc(data){
+  const s=new Blob([unb64(data)]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new TextDecoder().decode(await new Response(s).arrayBuffer());
+}
+// 投稿された絵（プロジェクトJSON）を1コマ分だけキャンバスに描く
+function drawDoc(canvas, doc, fi){
+  const w=doc.w, h=doc.h, f=doc.frames[fi % doc.frames.length];
+  canvas.width=w; canvas.height=h;
+  const g=canvas.getContext('2d'), img=g.createImageData(w,h), d=img.data;
+  for(let i=0;i<f.length;i++){
+    const idx=f[i], o=i*4;
+    if(idx<0){ d[o+3]=0; continue; }
+    const c=doc.palette[idx]||[0,0,0];
+    d[o]=c[0]; d[o+1]=c[1]; d[o+2]=c[2]; d[o+3]=255;
+  }
+  g.putImageData(img,0,0);
+}
+
+let workTimer=null, workState={authed:false, storage:false, loaded:false};
+const worksHTML=html=>{ $('#worksBody').innerHTML=html; };
+
+async function renderWorks(){
+  clearInterval(workTimer); workTimer=null;
+  worksHTML('<div class="notice hint">よみこみ中…</div>');
+  let s;
+  try{ s=await API.session(); }
+  catch{
+    worksHTML(`<div class="notice hint">「みんなの作品」はインターネット上に公開した版でだけ使えます。<br>
+      いま開いているのはファイル単体（またはGitHub Pages版）なので、サーバーがありません。</div>`);
+    return;
+  }
+  workState.authed=!!s.authed; workState.storage=!!s.storage;
+
+  if(!workState.authed){                                   // ログイン画面
+    worksHTML(`<div class="notice">
+      <div class="hint" style="margin-bottom:8px">みんなの作品を見る・とうこうするには、あいことばを入れてね。</div>
+      <div class="row"><input type="password" id="gpw" placeholder="あいことば" inputmode="numeric"
+        style="flex:1;min-width:120px" autocomplete="current-password">
+        <button class="primary" id="gLogin">はいる</button></div>
+      <div class="hint" id="gErr" style="color:#ff9c9c; margin-top:6px"></div></div>`);
+    const go=async()=>{
+      $('#gErr').textContent='';
+      try{ await API.login($('#gpw').value); renderWorks(); }
+      catch(e){ $('#gErr').textContent=e.message; }
+    };
+    $('#gLogin').onclick=go;
+    $('#gpw').onkeydown=e=>{ if(e.key==='Enter') go(); };
+    $('#gpw').focus();
+    return;
+  }
+
+  let items=[];
+  try{ items=await API.list(); }
+  catch(e){
+    worksHTML(`<div class="notice hint">${e.message}</div>`);
+    return;
+  }
+
+  const canPost = S.w<=128 && S.h<=128;
+  worksHTML(`<div class="row" style="gap:8px">
+      <button class="primary" id="gPost" ${canPost?'':'disabled'}>いまの絵をとうこう</button>
+      <button id="gReload">さいしんにする</button>
+      <button id="gLogout" style="margin-left:auto">ログアウト</button>
+    </div>
+    <div class="hint" style="margin-top:6px">${canPost
+      ? 'とうこうすると、あいことばを知っている人みんなが見られます。'
+      : `いまの絵は ${S.w}×${S.h}px です。とうこうできるのは 128×128px までです。`}</div>
+    <div id="workList"></div>
+    ${items.length?'':'<div class="notice hint">まだ1つもとうこうがありません。さいしょの1つをとうこうしてみよう。</div>'}`);
+
+  $('#gReload').onclick=renderWorks;
+  $('#gLogout').onclick=async()=>{ await API.logout(); renderWorks(); };
+  $('#gPost').onclick=postWork;
+
+  const list=$('#workList'), anim=[];
+  for(const it of items){
+    let doc=null;
+    try{ doc=JSON.parse(await unpackDoc(it.data)); }catch{ continue; }
+    const b=document.createElement('button'); b.className='samp'; b.type='button';
+    const c=document.createElement('canvas');
+    const nm=document.createElement('b'); nm.textContent=it.title;
+    const mt=document.createElement('small'); mt.className='wmeta';
+    mt.textContent=`${it.author} ／ ${it.w}×${it.h}・${doc.frames.length}コマ`;
+    const del=document.createElement('span'); del.className='wdel'; del.textContent='けす';
+    del.onclick=async ev=>{
+      ev.stopPropagation();
+      if(!confirm(`「${it.title}」をギャラリーからけしますか？\nもとにはもどせません。`)) return;
+      try{ await API.remove(it.id); renderWorks(); }catch(e){ alert(e.message); }
+    };
+    b.append(c,nm,mt,del);
+    b.onclick=()=>loadWork(it,doc);
+    list.appendChild(b);
+    drawDoc(c,doc,0); anim.push({c,doc});
+  }
+  let t=0;
+  workTimer=setInterval(()=>{ t++; anim.forEach(a=>drawDoc(a.c,a.doc,t)); }, 380);
+}
+
+function loadWork(it,doc){
+  if(!isEmptyDoc() && !confirm(`「${it.title}」（${it.author}）をよみこみます。\nいまの絵とパレットは入れかわります。\n（⌘Z で元にもどせます）\n\nよろしいですか？`)) return;
+  pushUndo();
+  load(JSON.stringify(doc), true);
+  closeSamples();
+}
+
+async function postWork(){
+  if(S.w>128||S.h>128){ alert('とうこうできるのは 128×128px までです。'); return; }
+  const title=prompt('作品の名まえは？（24文字まで）','');
+  if(title===null) return;
+  const author=prompt('あなたの名まえは？（16文字まで）', localStorage.getItem('dotAuthor')||'');
+  if(author===null) return;
+  localStorage.setItem('dotAuthor', author);
+  const btn=$('#gPost'); if(btn){ btn.disabled=true; btn.textContent='とうこう中…'; }
+  try{
+    const data=await packDoc(serialize());
+    await API.post({title, author, w:S.w, h:S.h, frames:S.frames.length, data});
+    renderWorks();
+  }catch(e){
+    alert(e.message);
+    if(btn){ btn.disabled=false; btn.textContent='いまの絵をとうこう'; }
+  }
+}
+
+document.querySelectorAll('.gtab').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('.gtab').forEach(x=>x.classList.toggle('on', x===b));
+    const works=b.dataset.tab==='works';
+    $('#tabSamples').hidden=works; $('#tabWorks').hidden=!works;
+    if(works) renderWorks(); else { clearInterval(workTimer); workTimer=null; }
+  };
+});
 
 /* ================= 保存・読込 ================= */
 function serialize(){
@@ -1885,7 +2083,7 @@ function serialize(){
   });
 }
 function save(){ try{ localStorage.setItem('dotEditor', serialize()); }catch(e){} }
-function load(json){
+function load(json, keepHistory){
   const d=JSON.parse(json);
   S.w=d.w; S.h=d.h;
   S.palette=(d.palette&&d.palette.length===256)? d.palette : defaultPalette();
@@ -1894,8 +2092,9 @@ function load(json){
   S.cur=0; S.sel=Math.min(Math.max(0, d.sel ?? S.sel), 255);
   if(d.fps) $('#fps').value=d.fps;
   S.onion=!!d.onion; $('#onion').checked=S.onion;
-  undoStack=[]; redoStack=[]; updUndo();
-  fitZoom(); layout(); buildPalette(); renderAll();
+  if(!keepHistory){ undoStack=[]; redoStack=[]; }
+  updUndo();
+  userZoomed=false; fitZoom(); layout(); buildPalette(); renderAll();
 }
 $('#btnSave').onclick=()=>{
   const b=new Blob([serialize()],{type:'application/json'});
@@ -1992,7 +2191,7 @@ updUndo();
 requestAnimationFrame(()=>{ fitZoom(); layout(); });
 // デバッグ／外部連携用フック
 window.DOT = { S, renderTo, frameToImageData, load, serialize, importImage, importSources,
-               buildAPNG, decodeAPNG, SAMPLES };
+               buildAPNG, decodeAPNG, SAMPLES, packDoc, unpackDoc, drawDoc };
 </script>
 </body>
 </html>
