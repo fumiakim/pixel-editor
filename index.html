@@ -45,9 +45,9 @@
     flex:1; overflow:auto; display:flex; align-items:center; justify-content:center; padding:24px;
     background:var(--bg);
   }
-  #wrap{position:relative; line-height:0; box-shadow:0 0 0 1px rgba(0,0,0,.5), 0 8px 32px rgba(0,0,0,.45)}
+  #wrap{position:relative; line-height:0; box-shadow:0 0 0 1px rgba(0,0,0,.5), 0 8px 32px rgba(0,0,0,.45);
+    background-color:var(--chk1)}
   #wrap.checker{
-    background-color:var(--chk1);
     background-image:
       linear-gradient(45deg,var(--chk2) 25%,transparent 25%),
       linear-gradient(-45deg,var(--chk2) 25%,transparent 25%),
@@ -56,6 +56,10 @@
     background-size:32px 32px;
     background-position:0 0,0 16px,16px -16px,-16px 0;
   }
+  /* 「格子」オフのときは模様だけ消し、明るさ（下地の色）はそのまま保つ */
+  body.nochecker #wrap,
+  body.nochecker .fr canvas,
+  body.nochecker #preview{background-image:none}
   #cv,#ov{display:block; position:absolute; left:0; top:0}
   #cv{position:relative; image-rendering:pixelated}
   #ov{pointer-events:none}
@@ -180,6 +184,7 @@
       <button id="zoomOut">−</button><span id="zoomLabel" style="min-width:44px;text-align:center">1200%</span><button id="zoomIn">＋</button>
       <button id="zoomFit">フィット</button>
       <label><input type="checkbox" id="grid" checked> グリッド</label>
+      <label title="透明部分を示す市松模様の表示・非表示"><input type="checkbox" id="checker" checked> 格子</label>
       <label title="前後のコマを薄く重ねて表示（前＝青／次＝赤）"><input type="checkbox" id="onion"> オニオン</label>
       <span id="pos">— , —</span>
     </div>
@@ -333,6 +338,7 @@ const S = {
   brush: 1,
   zoom: 12,
   grid: true,
+  checker: true,        // 透明部分の市松模様を表示するか
   onion: false,
   fps: 8,
   shapeFill: false,
@@ -2083,7 +2089,7 @@ document.querySelectorAll('.gtab').forEach(b=>{
 /* ================= 保存・読込 ================= */
 function serialize(){
   return JSON.stringify({
-    v:1, w:S.w, h:S.h, fps:+$('#fps').value, sel:S.sel, onion:S.onion,
+    v:1, w:S.w, h:S.h, fps:+$('#fps').value, sel:S.sel, onion:S.onion, checker:S.checker,
     palette:S.palette, frames:S.frames.map(f=>Array.from(f))
   });
 }
@@ -2097,6 +2103,7 @@ function load(json, keepHistory){
   S.cur=0; S.sel=Math.min(Math.max(0, d.sel ?? S.sel), 255);
   if(d.fps) $('#fps').value=d.fps;
   S.onion=!!d.onion; $('#onion').checked=S.onion;
+  S.checker = d.checker !== false;  applyChecker();   // 未記録の古いデータは表示ありとして扱う
   if(!keepHistory){ undoStack=[]; redoStack=[]; }
   updUndo();
   userZoomed=false; fitZoom(); layout(); buildPalette(); renderAll();
@@ -2126,6 +2133,11 @@ $('#btnUndo').onclick=undo; $('#btnRedo').onclick=redo;
 $('#brush').onchange=e=>S.brush=+e.target.value;
 $('#shapeFill').onchange=e=>S.shapeFill=e.target.checked;
 $('#grid').onchange=e=>{ S.grid=e.target.checked; drawGrid(); };
+function applyChecker(){
+  document.body.classList.toggle('nochecker', !S.checker);
+  $('#checker').checked=S.checker;
+}
+$('#checker').onchange=e=>{ S.checker=e.target.checked; applyChecker(); save(); };
 $('#onion').onchange=e=>{ S.onion=e.target.checked; drawCanvas(); };
 let userZoomed=false;
 $('#zoomIn').onclick=()=>{ userZoomed=true; S.zoom=Math.min(64,S.zoom+ (S.zoom<8?1:4)); layout(); };
